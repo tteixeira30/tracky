@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: tracky
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tracky}
+    username: ${SPRING_DATASOURCE_USERNAME:tracky}
+    password: ${SPRING_DATASOURCE_PASSWORD:tracky}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+server:
+  port: 8080
+  error:
+    include-message: always
+
+tracky:
+  jwt-secret: ${JWT_SECRET:tracky-dev-secret-nao-usar-em-producao-0123456789abcdef}
+  invite-code: ${TRACKY_INVITE_CODE:}

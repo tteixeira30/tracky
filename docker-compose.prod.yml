@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tracky-db
+    environment:
+      POSTGRES_DB: tracky
+      POSTGRES_USER: tracky
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD no ficheiro .env}
+    volumes:
+      - tracky-dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracky -d tracky"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: tracky-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/tracky
+      SPRING_DATASOURCE_USERNAME: tracky
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD no ficheiro .env}
+      JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET no ficheiro .env}
+      TRACKY_INVITE_CODE: ${INVITE_CODE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: tracky-frontend
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Caddy trata do HTTPS automático (Let's Encrypt) e encaminha o tráfego.
+  # É o único serviço exposto à internet — db, backend e frontend ficam na rede interna.
+  caddy:
+    image: caddy:2-alpine
+    container_name: tracky-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?define DOMAIN no ficheiro .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  tracky-dbdata:
+  caddy-data:
+  caddy-config:

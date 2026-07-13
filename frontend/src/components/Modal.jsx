@@ -1,0 +1,54 @@
+import { useEffect } from 'react'
+import { IconAlert, IconX } from './Icons'
+
+export default function Modal({ open, title, subtitle, onClose, children, footer, width = 540 }) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: width }} role="dialog" aria-modal="true">
+        <div className="modal-head">
+          <div>
+            <h3>{title}</h3>
+            {subtitle && <p className="modal-subtitle">{subtitle}</p>}
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Fechar">
+            <IconX size={18} />
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-foot">{footer}</div>}
+      </div>
+    </div>
+  )
+}
+
+export function ConfirmDialog({ open, title, message, confirmLabel = 'Eliminar', onConfirm, onCancel, busy }) {
+  if (!open) return null
+  return (
+    <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="modal modal-confirm" role="alertdialog" aria-modal="true">
+        <div className="confirm-icon"><IconAlert size={26} /></div>
+        <h3>{title}</h3>
+        <p>{message}</p>
+        <div className="confirm-actions">
+          <button className="btn ghost" onClick={onCancel} disabled={busy}>Cancelar</button>
+          <button className="btn danger" onClick={onConfirm} disabled={busy}>
+            {busy ? 'A eliminar…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+target/
+.idea/
+.vscode/
+*.log
+.env
+
+# extra safety
+*.key
+backup-*.sql
+Tracky.zip
+
+CHEATSHEET.md
+DEPLOY.md

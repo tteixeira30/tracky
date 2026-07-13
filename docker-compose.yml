@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tracky-db
+    environment:
+      POSTGRES_DB: tracky
+      POSTGRES_USER: tracky
+      POSTGRES_PASSWORD: tracky
+    volumes:
+      - tracky-dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracky -d tracky"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: tracky-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/tracky
+      SPRING_DATASOURCE_USERNAME: tracky
+      SPRING_DATASOURCE_PASSWORD: tracky
+      JWT_SECRET: ${JWT_SECRET:-tracky-local-secret-0a1b2c3d4e5f6g7h8i9j-troca-isto-em-producao}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    container_name: tracky-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  tracky-dbdata:
