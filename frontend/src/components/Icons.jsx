@@ -137,6 +137,21 @@ export const IconChevronRight = (p) => (
   </Icon>
 )
 
+export const IconGrid = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+  </Icon>
+)
+
+export const IconActivity = (p) => (
+  <Icon {...p}>
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </Icon>
+)
+
 export const IconLogout = (p) => (
   <Icon {...p}>
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

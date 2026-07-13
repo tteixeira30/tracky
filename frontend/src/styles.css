@@ -906,3 +906,89 @@ td .row-sub { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
   padding: 0;
 }
 .auth-switch button:hover { text-decoration: underline; }
+
+/* ---------- Dashboard ---------- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.kpi-card { padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+.kpi-card.accent {
+  background: linear-gradient(150deg, rgba(99, 102, 241, 0.14), rgba(34, 211, 238, 0.08)), var(--surface);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+.kpi-top { display: flex; align-items: center; gap: 9px; }
+.kpi-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--accent); flex-shrink: 0;
+}
+.kpi-card.accent .kpi-icon { background: rgba(34, 211, 238, 0.15); color: var(--cyan); }
+.kpi-label { font-size: 12px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.6px; }
+.kpi-value { font-size: 25px; font-weight: 700; letter-spacing: -0.6px; font-variant-numeric: tabular-nums; }
+.kpi-sub { font-size: 12.5px; color: var(--text-dim); }
+.kpi-sub .pos { color: var(--green); }
+.kpi-sub .neg { color: var(--red); }
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.dash-chart, .dash-side { padding: 20px; }
+.card-header h3 { display: flex; align-items: center; gap: 7px; }
+.card-header h3 svg { color: var(--cyan); }
+
+.insight-list, .activity-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.insight { display: flex; gap: 11px; align-items: flex-start; padding: 11px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); }
+.insight-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+  background: var(--accent-soft); color: var(--accent);
+}
+.insight.positive .insight-icon { background: var(--green-soft); color: var(--green); }
+.insight.warning .insight-icon { background: var(--red-soft); color: var(--red); }
+.insight.info .insight-icon { background: rgba(34, 211, 238, 0.13); color: var(--cyan); }
+.insight div { display: flex; flex-direction: column; gap: 2px; }
+.insight strong { font-size: 13px; font-weight: 600; }
+.insight span { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+
+.activity { display: flex; gap: 11px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.activity:last-child { border-bottom: none; }
+.activity-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  background: var(--accent-soft); color: var(--accent);
+}
+.activity-icon.goal { background: rgba(34, 211, 238, 0.13); color: var(--cyan); }
+.activity-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.activity-main strong { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.activity-main span { font-size: 12px; color: var(--text-faint); }
+.activity-time { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; flex-shrink: 0; }
+
+@media (max-width: 1000px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .dash-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Seletor de moeda ---------- */
+.currency-select { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.currency-select > span { font-size: 10.5px; font-weight: 500; color: var(--text-faint); letter-spacing: 0.6px; text-transform: uppercase; }
+.currency-select select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.currency-select select:focus { outline: none; border-color: var(--accent); }

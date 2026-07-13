@@ -1,21 +1,34 @@
 import { useState } from 'react'
+import DashboardPage from './pages/DashboardPage'
 import IncomePage from './pages/IncomePage'
 import InvestmentsPage from './pages/InvestmentsPage'
 import GoalsPage from './pages/GoalsPage'
 import AuthPage from './pages/AuthPage'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './components/AuthContext'
-import { IconLogo, IconWallet, IconTrendingUp, IconTarget, IconLogout } from './components/Icons'
+import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconLogout } from './components/Icons'
 
 const TABS = [
+  { id: 'dashboard', label: 'Painel', icon: IconGrid },
   { id: 'income', label: 'Rendimento', icon: IconWallet },
   { id: 'investments', label: 'Investimentos', icon: IconTrendingUp },
   { id: 'goals', label: 'Objetivos', icon: IconTarget },
 ]
 
+const CURRENCIES = [
+  { code: 'EUR', label: 'Euro (€)' },
+  { code: 'USD', label: 'Dólar EUA ($)' },
+  { code: 'GBP', label: 'Libra (£)' },
+  { code: 'BRL', label: 'Real (R$)' },
+  { code: 'CHF', label: 'Franco suíço (Fr)' },
+  { code: 'CAD', label: 'Dólar canadiano (C$)' },
+  { code: 'AUD', label: 'Dólar australiano (A$)' },
+  { code: 'JPY', label: 'Iene (¥)' },
+]
+
 function Shell() {
-  const { user, loading, logout } = useAuth()
-  const [tab, setTab] = useState('income')
+  const { user, loading, logout, baseCurrency, changeCurrency } = useAuth()
+  const [tab, setTab] = useState('dashboard')
 
   if (loading) {
     return (
@@ -52,6 +65,12 @@ function Shell() {
           ))}
         </nav>
         <div className="sidebar-foot">
+          <label className="currency-select">
+            <span>Moeda base</span>
+            <select value={baseCurrency} onChange={(e) => changeCurrency(e.target.value)}>
+              {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} · {c.label}</option>)}
+            </select>
+          </label>
           <div className="user-chip">
             <span className="user-avatar">{initials}</span>
             <div className="user-info">
@@ -68,7 +87,8 @@ function Shell() {
           </div>
         </div>
       </aside>
-      <main className="main">
+      <main className="main" key={baseCurrency}>
+        {tab === 'dashboard' && <DashboardPage />}
         {tab === 'income' && <IncomePage />}
         {tab === 'investments' && <InvestmentsPage />}
         {tab === 'goals' && <GoalsPage />}

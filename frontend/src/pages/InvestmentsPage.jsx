@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { api, fmtEur, fmtPct } from '../api'
+import { api, fmtEur, fmtPct, fmtMoneyShort } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import { useToast } from '../components/Toast'
 import { IconCoins, IconPencil, IconPlus, IconRefresh, IconTrendingUp, IconWallet, IconSparkle } from '../components/Icons'
@@ -326,7 +326,7 @@ export default function InvestmentsPage() {
               <XAxis dataKey="date" stroke="#5c6478" fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
                      tickFormatter={(d) => new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} />
               <YAxis stroke="#5c6478" fontSize={11.5} axisLine={false} tickLine={false} width={72}
-                     tickFormatter={(v) => `${Math.round(v).toLocaleString('pt-PT')} €`} domain={['auto', 'auto']} />
+                     tickFormatter={fmtMoneyShort} domain={['auto', 'auto']} />
               <Tooltip content={<ChartTooltip />} />
               <Area type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2.2} fill="url(#grad)"
                     activeDot={{ r: 4, strokeWidth: 0 }} />
@@ -423,7 +423,7 @@ export default function InvestmentsPage() {
                            ? projectionDate(m).getFullYear()
                            : projectionDate(m).toLocaleDateString('pt-PT', { month: 'short', year: '2-digit' })} />
                   <YAxis stroke="#5c6478" fontSize={11.5} axisLine={false} tickLine={false} width={78}
-                         tickFormatter={(v) => `${Math.round(v).toLocaleString('pt-PT')} €`}
+                         tickFormatter={fmtMoneyShort}
                          domain={['auto', 'auto']} />
                   <Tooltip content={<ProjectionTooltip />} />
                   {projection.scenarios.map((s) => {

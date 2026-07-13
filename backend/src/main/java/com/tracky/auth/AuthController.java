@@ -1,5 +1,6 @@
 package com.tracky.auth;
 
+import com.tracky.currency.CurrencyService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Locale;
 import java.util.Map;
@@ -39,8 +41,9 @@ public class AuthController {
                                   @NotBlank @Size(min = 6, message = "A palavra-passe deve ter pelo menos 6 caracteres") String password,
                                   String inviteCode) {}
     public record LoginRequest(@NotBlank String email, @NotBlank String password) {}
-    public record UserDto(Long id, String name, String email) {}
+    public record UserDto(Long id, String name, String email, String baseCurrency) {}
     public record AuthResponse(String token, UserDto user) {}
+    public record CurrencyRequest(@NotBlank String baseCurrency) {}
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest req) {
@@ -76,7 +79,18 @@ public class AuthController {
         return toDto(user);
     }
 
+    @PutMapping("/me/currency")
+    public UserDto setCurrency(@AuthenticationPrincipal User user, @Valid @RequestBody CurrencyRequest req) {
+        String c = req.baseCurrency().trim().toUpperCase(Locale.ROOT);
+        if (!CurrencyService.SUPPORTED.contains(c)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Moeda não suportada: " + req.baseCurrency());
+        }
+        user.setBaseCurrency(c);
+        userRepository.save(user);
+        return toDto(user);
+    }
+
     private UserDto toDto(User u) {
-        return new UserDto(u.getId(), u.getName(), u.getEmail());
+        return new UserDto(u.getId(), u.getName(), u.getEmail(), u.getBaseCurrency());
     }
 }

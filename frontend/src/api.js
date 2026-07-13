@@ -31,6 +31,13 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // Painel geral
+  getDashboard: () => request('/dashboard'),
+
+  // Moeda
+  getCurrency: () => request('/currency'),
+  setCurrency: (baseCurrency) => request('/auth/me/currency', { method: 'PUT', body: JSON.stringify({ baseCurrency }) }),
+
   // Autenticação
   register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
@@ -67,8 +74,37 @@ export const api = {
   deleteGoal: (id) => request(`/goals/${id}`, { method: 'DELETE' }),
 }
 
+// ---------- Moeda de apresentação ----------
+// O backend devolve sempre valores em EUR; aqui convertem-se para a moeda base
+// escolhida pelo utilizador (rate = quantas unidades da base valem 1 EUR).
+let displayCurrency = 'EUR'
+let displayRate = 1
+
+export const setDisplayCurrency = (currency, rateFromEur) => {
+  displayCurrency = currency || 'EUR'
+  displayRate = Number(rateFromEur) > 0 ? Number(rateFromEur) : 1
+}
+export const getDisplayCurrency = () => displayCurrency
+
+/** Converte um valor introduzido na moeda base para EUR (para enviar ao backend). */
+export const toEur = (baseValue) => {
+  const n = Number(baseValue)
+  if (!Number.isFinite(n)) return baseValue
+  return displayRate === 1 ? n : n / displayRate
+}
+
+/** Formata um valor em EUR, convertido e apresentado na moeda base. */
 export const fmtEur = (v) =>
-  v == null ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v)
+  v == null ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: displayCurrency }).format(v * displayRate)
+
+/** Versão curta (sem casas decimais) para eixos de gráficos, na moeda base. */
+export const fmtMoneyShort = (v) => {
+  if (v == null) return ''
+  const parts = new Intl.NumberFormat('pt-PT', {
+    style: 'currency', currency: displayCurrency, maximumFractionDigits: 0,
+  }).formatToParts(v * displayRate)
+  return parts.map((p) => p.value).join('')
+}
 
 export const fmtPct = (v) =>
   v == null ? '—' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`

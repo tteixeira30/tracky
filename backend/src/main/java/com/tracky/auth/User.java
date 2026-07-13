@@ -25,6 +25,10 @@ public class User {
     @Column(nullable = false)
     private String passwordHash;
 
+    /** Moeda base de apresentação (ISO 4217, ex: EUR, USD). O cálculo interno é sempre em EUR. */
+    @Column(length = 3)
+    private String baseCurrency = "EUR";
+
     private Instant createdAt = Instant.now();
 
     public Long getId() { return id; }
@@ -34,5 +38,7 @@ public class User {
     public void setEmail(String email) { this.email = email; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public String getBaseCurrency() { return baseCurrency == null ? "EUR" : baseCurrency; }
+    public void setBaseCurrency(String baseCurrency) { this.baseCurrency = baseCurrency; }
     public Instant getCreatedAt() { return createdAt; }
 }
