@@ -125,6 +125,18 @@ export const IconSparkle = (p) => (
   </Icon>
 )
 
+export const IconChevronLeft = (p) => (
+  <Icon {...p}>
+    <polyline points="15 18 9 12 15 6" />
+  </Icon>
+)
+
+export const IconChevronRight = (p) => (
+  <Icon {...p}>
+    <polyline points="9 18 15 12 9 6" />
+  </Icon>
+)
+
 export const IconLogout = (p) => (
   <Icon {...p}>
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

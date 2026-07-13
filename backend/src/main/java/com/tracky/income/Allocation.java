@@ -20,6 +20,9 @@ public class Allocation {
     @Column(name = "user_id")
     private Long userId;
 
+    /** Mês a que esta categoria pertence, formato AAAA-MM (ex: 2026-07). */
+    private String month;
+
     private String name;
 
     /** Percentagem do rendimento (null quando a categoria é definida por valor fixo). */
@@ -32,6 +35,8 @@ public class Allocation {
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+    public String getMonth() { return month; }
+    public void setMonth(String month) { this.month = month; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public BigDecimal getPercentage() { return percentage; }

@@ -36,10 +36,10 @@ export const api = {
   login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
   me: () => request('/auth/me'),
 
-  // Rendimento
-  getIncome: () => request('/income'),
-  setIncome: (monthlyIncome) => request('/income', { method: 'PUT', body: JSON.stringify({ monthlyIncome }) }),
-  addAllocation: (data) => request('/income/allocations', { method: 'POST', body: JSON.stringify(data) }),
+  // Rendimento (mensal)
+  getIncome: (month) => request(`/income${month ? `?month=${month}` : ''}`),
+  setIncome: (monthlyIncome, month) => request(`/income${month ? `?month=${month}` : ''}`, { method: 'PUT', body: JSON.stringify({ monthlyIncome }) }),
+  addAllocation: (data, month) => request(`/income/allocations${month ? `?month=${month}` : ''}`, { method: 'POST', body: JSON.stringify(data) }),
   updateAllocation: (id, data) => request(`/income/allocations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteAllocation: (id) => request(`/income/allocations/${id}`, { method: 'DELETE' }),
 

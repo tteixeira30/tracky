@@ -1,13 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { api, fmtEur } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import { useToast } from '../components/Toast'
-import { IconPencil, IconPlus, IconPie, IconWallet } from '../components/Icons'
+import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconPie, IconWallet } from '../components/Icons'
 
 const COLORS = ['#6366f1', '#22d3ee', '#10b981', '#f59e0b', '#ef4444', '#a78bfa', '#fb923c', '#e879f9']
 
 const EMPTY_ALLOC = { name: '', mode: 'percentage', value: '' }
+
+const fmtMonth = (m) => {
+  if (!m) return ''
+  const label = new Date(`${m}-01T00:00:00`).toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
 
 function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
@@ -28,17 +34,28 @@ export default function IncomePage() {
   const [allocForm, setAllocForm] = useState(EMPTY_ALLOC)
   const [toDelete, setToDelete] = useState(null)
   const [busy, setBusy] = useState(false)
+  const copiedNotified = useRef(false)
+
+  const load = (month) =>
+    api.getIncome(month).then((d) => {
+      setData(d)
+      if (d.copiedFrom && !copiedNotified.current) {
+        copiedNotified.current = true
+        toast.info('Novo mês iniciado', `Categorias e rendimento copiados de ${fmtMonth(d.copiedFrom)} — ajusta o que for preciso.`)
+      }
+      return d
+    })
 
   useEffect(() => {
-    api.getIncome().then(setData).catch(() => toast.error('Erro', 'Não foi possível carregar os dados.'))
+    load().catch(() => toast.error('Erro', 'Não foi possível carregar os dados.'))
   }, [])
 
   const saveIncome = async () => {
     setBusy(true)
     try {
-      setData(await api.setIncome(Number(incomeInput) || 0))
+      setData(await api.setIncome(Number(incomeInput) || 0, data.month))
       setIncomeModal(false)
-      toast.success('Rendimento atualizado', `Definido para ${fmtEur(Number(incomeInput) || 0)}.`)
+      toast.success('Rendimento atualizado', `${fmtMonth(data.month)}: ${fmtEur(Number(incomeInput) || 0)}.`)
     } catch (e) { toast.error('Erro ao guardar', e.message) }
     finally { setBusy(false) }
   }
@@ -56,10 +73,10 @@ export default function IncomePage() {
       const payload = allocForm.mode === 'percentage'
         ? { name: allocForm.name.trim(), percentage: value }
         : { name: allocForm.name.trim(), fixedAmount: value }
-      setData(await api.addAllocation(payload))
+      setData(await api.addAllocation(payload, data.month))
       setAllocModal(false)
       setAllocForm(EMPTY_ALLOC)
-      toast.success('Categoria adicionada', `"${allocForm.name.trim()}" incluída na distribuição.`)
+      toast.success('Categoria adicionada', `"${allocForm.name.trim()}" incluída em ${fmtMonth(data.month)}.`)
     } catch (e) { toast.error('Erro ao adicionar', e.message) }
     finally { setBusy(false) }
   }
@@ -68,7 +85,7 @@ export default function IncomePage() {
     setBusy(true)
     try {
       setData(await api.deleteAllocation(toDelete.id))
-      toast.info('Categoria removida', `"${toDelete.name}" já não faz parte da distribuição.`)
+      toast.info('Categoria removida', `"${toDelete.name}" removida de ${fmtMonth(data.month)}.`)
       setToDelete(null)
     } catch (e) { toast.error('Erro ao remover', e.message) }
     finally { setBusy(false) }
@@ -92,6 +109,18 @@ export default function IncomePage() {
   const pieData = data.allocations.map((a) => ({ name: a.name, value: Number(a.amount) }))
   if (Number(data.unallocated) > 0.005) pieData.push({ name: 'Não alocado', value: Number(data.unallocated) })
 
+  // navegação entre meses com dados
+  const months = data.availableMonths ?? []
+  const monthIdx = months.indexOf(data.month)
+  const prevMonth = monthIdx > 0 ? months[monthIdx - 1] : null
+  const nextMonth = monthIdx >= 0 && monthIdx < months.length - 1 ? months[monthIdx + 1] : null
+
+  const goTo = (m) => {
+    if (!m) return
+    setData(null)
+    load(m).catch(() => toast.error('Erro', 'Não foi possível carregar esse mês.'))
+  }
+
   const isPct = allocForm.mode === 'percentage'
   const formValue = Number(allocForm.value) || 0
   const formHint = !formValue ? null
@@ -104,7 +133,23 @@ export default function IncomePage() {
       <div className="page-head">
         <div>
           <h2>Rendimento</h2>
-          <p>Define o teu rendimento mensal e distribui-o por categorias.</p>
+          <p>Regista o rendimento de cada mês e distribui-o por categorias.</p>
+        </div>
+        <div className="page-actions">
+          <div className="month-nav">
+            <button className="icon-btn" onClick={() => goTo(prevMonth)} disabled={!prevMonth}
+                    aria-label="Mês anterior" title={prevMonth ? fmtMonth(prevMonth) : 'Sem meses anteriores'}>
+              <IconChevronLeft size={17} />
+            </button>
+            <div className="month-label">
+              <strong>{fmtMonth(data.month)}</strong>
+              {data.current && <span className="badge live">atual</span>}
+            </div>
+            <button className="icon-btn" onClick={() => goTo(nextMonth)} disabled={!nextMonth}
+                    aria-label="Mês seguinte" title={nextMonth ? fmtMonth(nextMonth) : 'Já estás no mês mais recente'}>
+              <IconChevronRight size={17} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -113,7 +158,7 @@ export default function IncomePage() {
           <span className="stat-icon" style={{ width: 46, height: 46 }}><IconWallet size={22} /></span>
           <div>
             <div className="amount">{fmtEur(income)}</div>
-            <div className="caption">Rendimento líquido mensal</div>
+            <div className="caption">Rendimento líquido de {fmtMonth(data.month)}</div>
           </div>
         </div>
         <button className="btn ghost" onClick={() => { setIncomeInput(income || ''); setIncomeModal(true) }}>
@@ -126,7 +171,7 @@ export default function IncomePage() {
           <div className="card-header">
             <div>
               <h3>Distribuição</h3>
-              <div className="sub">Como divides o rendimento todos os meses</div>
+              <div className="sub">Como divides o rendimento de {fmtMonth(data.month)}</div>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <span className={`badge ${overAllocated ? 'warn' : 'accent'}`}>{totalPct.toFixed(0)}% alocado</span>
@@ -140,7 +185,7 @@ export default function IncomePage() {
             <div className="empty-state">
               <div className="empty-icon"><IconPie size={24} /></div>
               <h4>Sem categorias</h4>
-              <p>Cria a primeira categoria para começares a distribuir o rendimento — por percentagem (ex: 30% poupança) ou por valor fixo (ex: 400€ renda).</p>
+              <p>Cria a primeira categoria para distribuir o rendimento deste mês — por percentagem (ex: 30% poupança) ou por valor fixo (ex: 400€ renda).</p>
               <button className="btn" onClick={() => setAllocModal(true)}><IconPlus size={15} /> Criar categoria</button>
             </div>
           ) : (
@@ -183,7 +228,7 @@ export default function IncomePage() {
           )}
           {overAllocated && (
             <p className="hint" style={{ color: 'var(--amber)' }}>
-              Atenção: a soma das categorias ultrapassa o rendimento mensal em {fmtEur(Math.abs(Number(data.unallocated)))}.
+              Atenção: a soma das categorias ultrapassa o rendimento deste mês em {fmtEur(Math.abs(Number(data.unallocated)))}.
             </p>
           )}
         </div>
@@ -192,14 +237,14 @@ export default function IncomePage() {
           <div className="card-header">
             <div>
               <h3>Visão geral</h3>
-              <div className="sub">Distribuição do rendimento em euros</div>
+              <div className="sub">Distribuição de {fmtMonth(data.month)} em euros</div>
             </div>
           </div>
           {pieData.length === 0 || (income === 0 && Number(data.totalAllocated) === 0) ? (
             <div className="empty-state">
               <div className="empty-icon"><IconPie size={24} /></div>
               <h4>Nada para mostrar</h4>
-              <p>Define o rendimento mensal e cria categorias para veres o gráfico da distribuição.</p>
+              <p>Define o rendimento deste mês e cria categorias para veres o gráfico da distribuição.</p>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={290}>
@@ -216,7 +261,8 @@ export default function IncomePage() {
       </div>
 
       <Modal open={incomeModal} onClose={() => setIncomeModal(false)}
-             title="Editar rendimento" subtitle="Valor líquido que recebes por mês." width={420}
+             title={`Rendimento de ${fmtMonth(data.month)}`}
+             subtitle="Valor líquido que recebeste (ou vais receber) neste mês." width={420}
              footer={
                <>
                  <button className="btn ghost" onClick={() => setIncomeModal(false)}>Cancelar</button>
@@ -224,7 +270,7 @@ export default function IncomePage() {
                </>
              }>
         <div className="field">
-          <label>Rendimento mensal</label>
+          <label>Rendimento do mês</label>
           <div className="input-affix">
             <input type="number" min="0" step="0.01" autoFocus value={incomeInput}
                    onChange={(e) => setIncomeInput(e.target.value)}
@@ -235,7 +281,7 @@ export default function IncomePage() {
       </Modal>
 
       <Modal open={allocModal} onClose={() => setAllocModal(false)}
-             title="Nova categoria" subtitle="Reserva uma parte do rendimento por percentagem ou valor fixo." width={440}
+             title="Nova categoria" subtitle={`Reserva uma parte do rendimento de ${fmtMonth(data.month)}.`} width={440}
              footer={
                <>
                  <button className="btn ghost" onClick={() => setAllocModal(false)}>Cancelar</button>
@@ -282,7 +328,7 @@ export default function IncomePage() {
 
       <ConfirmDialog open={!!toDelete} busy={busy}
                      title="Remover categoria?"
-                     message={`A categoria "${toDelete?.name}" vai ser removida da distribuição. Esta ação não pode ser anulada.`}
+                     message={`A categoria "${toDelete?.name}" vai ser removida de ${fmtMonth(data.month)}. Esta ação não pode ser anulada.`}
                      confirmLabel="Remover"
                      onConfirm={removeAlloc} onCancel={() => setToDelete(null)} />
     </div>
