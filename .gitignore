@@ -6,6 +6,11 @@ target/
 *.log
 .env
 
+# IDE metadata
+.metals/
+.bloop/
+.bsp/
+
 # extra safety
 *.key
 backup-*.sql
