@@ -4,8 +4,10 @@ import com.tracky.auth.User;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.YearMonth;
 
@@ -178,23 +180,43 @@ public class InvestmentController {
      * Projeção deliberadamente conservadora do portefólio.
      * Cenários abaixo da média histórica dos mercados; inclui a linha de referência
      * "total investido" (0%) para comparação com o que foi efetivamente contribuído.
+     * type filtra o ponto de partida por tipo de ativo; customRate acrescenta um cenário próprio.
      */
     @GetMapping("/projection")
     public ProjectionResponse projection(@AuthenticationPrincipal User user,
                                          @RequestParam(defaultValue = "60") int months,
-                                         @RequestParam(defaultValue = "0") BigDecimal monthly) {
+                                         @RequestParam(defaultValue = "0") BigDecimal monthly,
+                                         @RequestParam(required = false) String type,
+                                         @RequestParam(required = false) BigDecimal customRate) {
         int horizon = Math.max(1, Math.min(months, 600));
         BigDecimal contribution = (monthly == null || monthly.signum() < 0) ? BigDecimal.ZERO : monthly;
+
+        Investment.Type typeFilter = null;
+        if (type != null && !type.isBlank() && !type.equalsIgnoreCase("all")) {
+            try {
+                typeFilter = Investment.Type.valueOf(type.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tipo de investimento inválido: " + type);
+            }
+        }
+        final Investment.Type filter = typeFilter;
+
         BigDecimal start = repo.findByUserIdOrderByIdAsc(user.getId()).stream()
+                .filter(inv -> filter == null || inv.getType() == filter)
                 .map(inv -> enrich(inv).currentValue())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         record ScenarioDef(String id, String label, double annualRate) {}
-        List<ScenarioDef> defs = List.of(
+        List<ScenarioDef> defs = new ArrayList<>(List.of(
                 new ScenarioDef("pessimista", "Pessimista", -2.0),
                 new ScenarioDef("investido", "Total investido (0%)", 0.0),
                 new ScenarioDef("conservador", "Conservador", 2.0),
-                new ScenarioDef("moderado", "Moderado", 5.0));
+                new ScenarioDef("moderado", "Moderado", 5.0)));
+        if (customRate != null) {
+            // limitar a valores matematicamente seguros e realistas
+            double rate = Math.max(-95, Math.min(customRate.doubleValue(), 100));
+            defs.add(new ScenarioDef("custom", "Personalizado", rate));
+        }
 
         List<ProjectionScenario> scenarios = defs.stream().map(def -> {
             double monthlyRate = Math.pow(1 + def.annualRate() / 100.0, 1.0 / 12.0) - 1;

@@ -640,8 +640,9 @@ td .row-sub { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
   .stat-value { font-size: 19px; }
   .stat-icon { width: 32px; height: 32px; }
   .income-hero .amount { font-size: 27px; }
-  .proj-controls { width: 100%; }
-  .proj-controls .input-affix { flex: 1; min-width: 0; width: auto !important; }
+  .proj-panel { gap: 12px; }
+  .proj-field { flex: 1; min-width: 120px; }
+  .proj-field .input-affix { width: 100% !important; }
   .proj-legend { grid-template-columns: 1fr 1fr; }
   .goal-contribute .input-affix { max-width: none; }
 }
@@ -786,8 +787,35 @@ td .row-sub { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
 
 /* ---------- Projeção ---------- */
 
-.proj-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.proj-controls input { padding: 8px 11px; font-size: 13px; }
+.proj-panel {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 18px;
+}
+.proj-field { display: flex; flex-direction: column; gap: 6px; }
+.proj-field > label { font-size: 11.5px; font-weight: 500; color: var(--text-dim); }
+.proj-row { display: flex; gap: 6px; align-items: center; }
+.proj-panel input { padding: 8px 11px; font-size: 13px; background: var(--surface); }
+
+.input-affix.wide input { padding-right: 56px; }
+
+.icon-btn.primary {
+  width: 37px;
+  height: 37px;
+  background: linear-gradient(180deg, #7276f5, var(--accent));
+  color: #fff;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.28);
+  margin-left: auto;
+}
+.icon-btn.primary:hover { background: linear-gradient(180deg, #7276f5, var(--accent)); color: #fff; filter: brightness(1.12); }
+.icon-btn.primary:active { transform: translateY(1px); }
 
 .proj-legend {
   display: grid;

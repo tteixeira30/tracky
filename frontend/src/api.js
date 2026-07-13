@@ -49,7 +49,12 @@ export const api = {
   updateInvestment: (id, data) => request(`/investments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteInvestment: (id) => request(`/investments/${id}`, { method: 'DELETE' }),
   getPortfolioHistory: (range) => request(`/investments/portfolio/history?range=${range}`),
-  getProjection: (months, monthly) => request(`/investments/projection?months=${months}&monthly=${monthly || 0}`),
+  getProjection: (months, monthly, type, customRate) => {
+    let q = `months=${months}&monthly=${monthly || 0}`
+    if (type && type !== 'all') q += `&type=${type}`
+    if (customRate != null && customRate !== '') q += `&customRate=${customRate}`
+    return request(`/investments/projection?${q}`)
+  },
 
   // Depósitos mensais automáticos
   applyDeposits: (scope) => request(`/contributions/apply?scope=${scope}&force=true`, { method: 'POST' }),

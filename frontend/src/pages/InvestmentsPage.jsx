@@ -24,13 +24,19 @@ const typeLabel = (t) => TYPES.find((x) => x.id === t)?.label ?? t
 const EMPTY_FORM = { name: '', symbol: '', type: 'ETF', currentValue: '', gainPercent: '', monthlyContribution: '' }
 
 // rampa sequencial (cenários ordenados) validada para o fundo escuro;
-// o pessimista é o mais saliente de propósito — a projeção é conservadora
-const SCENARIOS = [
-  { id: 'moderado', label: 'Moderado (+5%/ano)', color: '#e0e7ff' },
-  { id: 'conservador', label: 'Conservador (+2%/ano)', color: '#a5b4fc' },
-  { id: 'investido', label: 'Total investido (0%)', color: '#5c6478', dashed: true },
-  { id: 'pessimista', label: 'Pessimista (-2%/ano)', color: '#6366f1' },
-]
+// o pessimista é o mais saliente de propósito — a projeção é conservadora.
+// o cenário personalizado (escolhido pelo utilizador) usa o ciano para se distinguir da rampa
+const SCENARIO_META = {
+  moderado: { label: 'Moderado', color: '#e0e7ff' },
+  conservador: { label: 'Conservador', color: '#a5b4fc' },
+  investido: { label: 'Total investido', color: '#5c6478', dashed: true },
+  pessimista: { label: 'Pessimista', color: '#6366f1' },
+  custom: { label: 'Personalizado', color: '#22d3ee' },
+}
+
+const scenarioMeta = (id) => SCENARIO_META[id] ?? { label: id, color: '#8b93a7' }
+
+const fmtRate = (r) => `${r > 0 ? '+' : ''}${Number(r) % 1 === 0 ? Number(r) : Number(r).toFixed(1)}%/ano`
 
 function projectionDate(monthOffset) {
   const d = new Date()
@@ -41,16 +47,16 @@ function projectionDate(monthOffset) {
 function ProjectionTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   const d = projectionDate(label)
+  const rows = [...payload].sort((a, b) => b.value - a.value)
   return (
     <div className="chart-tooltip">
       <div className="tt-label">{d.toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}</div>
-      {SCENARIOS.map((s) => {
-        const entry = payload.find((p) => p.dataKey === s.id)
-        if (!entry) return null
+      {rows.map((entry) => {
+        const meta = scenarioMeta(entry.dataKey)
         return (
-          <div key={s.id} className="tt-row">
-            <span className="alloc-color" style={{ background: s.color, marginRight: 6 }} />
-            <span className="tt-name">{s.label.split(' (')[0]}</span>
+          <div key={entry.dataKey} className="tt-row">
+            <span className="alloc-color" style={{ background: meta.color, marginRight: 6 }} />
+            <span className="tt-name">{meta.label}</span>
             <strong>{fmtEur(entry.value)}</strong>
           </div>
         )
@@ -84,6 +90,9 @@ export default function InvestmentsPage() {
   const [projUnit, setProjUnit] = useState('anos')
   const [projHorizon, setProjHorizon] = useState(5)
   const [projMonthly, setProjMonthly] = useState('')
+  const [projRate, setProjRate] = useState('')
+  const [projType, setProjType] = useState('all')
+  const [projParams, setProjParams] = useState({ months: 60, monthly: 0, rate: null })
   const [projection, setProjection] = useState(null)
 
   const load = useCallback(() => api.getInvestments().then(setPortfolio), [])
@@ -101,15 +110,23 @@ export default function InvestmentsPage() {
 
   useEffect(() => {
     if (!portfolio) return
-    const months = projUnit === 'anos' ? Number(projHorizon) * 12 : Number(projHorizon)
-    if (!months || months <= 0) return
-    const t = setTimeout(() => {
-      api.getProjection(Math.min(months, 600), Number(projMonthly) || 0)
-        .then(setProjection)
-        .catch(() => setProjection(null))
-    }, 350)
-    return () => clearTimeout(t)
-  }, [projUnit, projHorizon, projMonthly, portfolio?.summary?.totalCurrent])
+    api.getProjection(projParams.months, projParams.monthly, projType, projParams.rate)
+      .then(setProjection)
+      .catch(() => setProjection(null))
+  }, [projParams, projType, portfolio?.summary?.totalCurrent])
+
+  const applyProjection = () => {
+    const h = Number(projHorizon)
+    if (!h || h <= 0) {
+      toast.error('Horizonte inválido', 'Indica um número de meses ou anos maior que zero.')
+      return
+    }
+    setProjParams({
+      months: Math.min(projUnit === 'anos' ? h * 12 : h, 600),
+      monthly: Number(projMonthly) || 0,
+      rate: projRate === '' ? null : Number(projRate),
+    })
+  }
 
   const refresh = async () => {
     setRefreshing(true)
@@ -324,28 +341,62 @@ export default function InvestmentsPage() {
             <h3>Projeção do portefólio</h3>
             <div className="sub">Cenários deliberadamente conservadores — abaixo da média histórica dos mercados</div>
           </div>
-          <div className="proj-controls">
-            <div className="input-affix" style={{ width: 90 }}>
-              <input type="number" min="1" max={projUnit === 'anos' ? 50 : 600} value={projHorizon}
-                     onChange={(e) => setProjHorizon(e.target.value)} aria-label="Horizonte" />
+          <div className="range-buttons">
+            {[{ id: 'all', label: 'Tudo' }, ...TYPES].map((t) => (
+              <button key={t.id} className={projType === t.id ? 'active' : ''}
+                      onClick={() => setProjType(t.id)} title={t.id === 'all' ? 'Todos os ativos' : `Só ${t.label}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="proj-panel">
+          <div className="proj-field">
+            <label>Horizonte</label>
+            <div className="proj-row">
+              <div className="input-affix" style={{ width: 76 }}>
+                <input type="number" min="1" max={projUnit === 'anos' ? 50 : 600} value={projHorizon}
+                       onChange={(e) => setProjHorizon(e.target.value)}
+                       onKeyDown={(e) => e.key === 'Enter' && applyProjection()} aria-label="Horizonte" />
+              </div>
+              <div className="mode-toggle compact">
+                <button type="button" className={projUnit === 'meses' ? 'active' : ''} onClick={() => setProjUnit('meses')}>Meses</button>
+                <button type="button" className={projUnit === 'anos' ? 'active' : ''} onClick={() => setProjUnit('anos')}>Anos</button>
+              </div>
             </div>
-            <div className="mode-toggle compact">
-              <button type="button" className={projUnit === 'meses' ? 'active' : ''} onClick={() => setProjUnit('meses')}>Meses</button>
-              <button type="button" className={projUnit === 'anos' ? 'active' : ''} onClick={() => setProjUnit('anos')}>Anos</button>
-            </div>
-            <div className="input-affix" style={{ width: 150 }}>
-              <input type="number" min="0" step="10" placeholder="Reforço mensal" value={projMonthly}
-                     onChange={(e) => setProjMonthly(e.target.value)} aria-label="Reforço mensal" />
+          </div>
+          <div className="proj-field">
+            <label>Reforço mensal <span className="dim">(opcional)</span></label>
+            <div className="input-affix wide" style={{ width: 140 }}>
+              <input type="number" min="0" step="10" placeholder="0" value={projMonthly}
+                     onChange={(e) => setProjMonthly(e.target.value)}
+                     onKeyDown={(e) => e.key === 'Enter' && applyProjection()} aria-label="Reforço mensal" />
               <span className="affix">€/mês</span>
             </div>
           </div>
+          <div className="proj-field">
+            <label>Taxa própria <span className="dim">(opcional)</span></label>
+            <div className="input-affix wide" style={{ width: 130 }}>
+              <input type="number" step="0.5" min="-95" max="100" placeholder="ex: 7" value={projRate}
+                     onChange={(e) => setProjRate(e.target.value)}
+                     onKeyDown={(e) => e.key === 'Enter' && applyProjection()} aria-label="Taxa personalizada" />
+              <span className="affix">%/ano</span>
+            </div>
+          </div>
+          <button className="icon-btn primary" onClick={applyProjection}
+                  aria-label="Atualizar projeção" title="Atualizar projeção">
+            <IconRefresh size={17} />
+          </button>
         </div>
 
         {!projection || Number(projection.totalContributed) === 0 ? (
           <div className="empty-state">
             <div className="empty-icon"><IconSparkle size={24} /></div>
             <h4>Nada para projetar</h4>
-            <p>Adiciona investimentos ou define um reforço mensal para veres a projeção.</p>
+            <p>{projType === 'all'
+              ? 'Adiciona investimentos ou define um reforço mensal para veres a projeção.'
+              : `Não tens investimentos do tipo "${typeLabel(projType)}" — muda o filtro ou adiciona um.`}</p>
           </div>
         ) : (() => {
           const chartData = projection.scenarios[0].points.map((p, i) => {
@@ -358,7 +409,9 @@ export default function InvestmentsPage() {
           const yearTicks = longHorizon
             ? chartData.filter((r) => projectionDate(r.month).getMonth() === 0).map((r) => r.month)
             : undefined
-          const finalOf = (id) => projection.scenarios.find((s) => s.id === id)?.finalValue
+          // chips ordenados do cenário mais otimista para o mais pessimista
+          const sortedScenarios = [...projection.scenarios]
+            .sort((a, b) => b.annualRatePercent - a.annualRatePercent)
           return (
             <>
               <ResponsiveContainer width="100%" height={280}>
@@ -373,24 +426,27 @@ export default function InvestmentsPage() {
                          tickFormatter={(v) => `${Math.round(v).toLocaleString('pt-PT')} €`}
                          domain={['auto', 'auto']} />
                   <Tooltip content={<ProjectionTooltip />} />
-                  {SCENARIOS.map((s) => (
-                    <Line key={s.id} type="monotone" dataKey={s.id} stroke={s.color} strokeWidth={2}
-                          dot={false} strokeDasharray={s.dashed ? '5 4' : undefined}
-                          activeDot={{ r: 3.5, strokeWidth: 0 }} />
-                  ))}
+                  {projection.scenarios.map((s) => {
+                    const meta = scenarioMeta(s.id)
+                    return (
+                      <Line key={s.id} type="monotone" dataKey={s.id} stroke={meta.color} strokeWidth={2}
+                            dot={false} strokeDasharray={meta.dashed ? '5 4' : undefined}
+                            activeDot={{ r: 3.5, strokeWidth: 0 }} />
+                    )
+                  })}
                 </LineChart>
               </ResponsiveContainer>
 
               <div className="proj-legend">
-                {SCENARIOS.map((s) => {
-                  const finalValue = finalOf(s.id)
-                  const diff = Number(finalValue) - Number(projection.totalContributed)
+                {sortedScenarios.map((s) => {
+                  const meta = scenarioMeta(s.id)
+                  const diff = Number(s.finalValue) - Number(projection.totalContributed)
                   return (
                     <div key={s.id} className="proj-chip">
-                      <span className="alloc-color" style={{ background: s.color }} />
+                      <span className="alloc-color" style={{ background: meta.color }} />
                       <div>
-                        <small>{s.label}</small>
-                        <strong>{fmtEur(finalValue)}</strong>
+                        <small>{meta.label} ({fmtRate(s.annualRatePercent)})</small>
+                        <strong>{fmtEur(s.finalValue)}</strong>
                         {s.id !== 'investido' && (
                           <span className={diff >= 0 ? 'pos' : 'neg'}>
                             {diff >= 0 ? '+' : '−'}{fmtEur(Math.abs(diff))}
@@ -403,8 +459,9 @@ export default function InvestmentsPage() {
               </div>
               <p className="hint" style={{ marginTop: 12 }}>
                 Projeção simulada com juros compostos mensais a partir de {fmtEur(projection.startValue)} atuais
+                {projType !== 'all' && <> em {typeLabel(projType)}</>}
                 {Number(projection.monthlyContribution) > 0 && <> e reforços de {fmtEur(projection.monthlyContribution)}/mês</>}.
-                Cenários propositadamente pessimistas; retornos reais podem ser melhores ou piores. Não é aconselhamento financeiro.
+                Cenários base propositadamente pessimistas; retornos reais podem ser melhores ou piores. Não é aconselhamento financeiro.
               </p>
             </>
           )
