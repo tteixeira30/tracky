@@ -16,14 +16,14 @@ const TABS = [
 ]
 
 const CURRENCIES = [
-  { code: 'EUR', label: 'Euro (€)' },
-  { code: 'USD', label: 'Dólar EUA ($)' },
-  { code: 'GBP', label: 'Libra (£)' },
-  { code: 'BRL', label: 'Real (R$)' },
-  { code: 'CHF', label: 'Franco suíço (Fr)' },
-  { code: 'CAD', label: 'Dólar canadiano (C$)' },
-  { code: 'AUD', label: 'Dólar australiano (A$)' },
-  { code: 'JPY', label: 'Iene (¥)' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'USD', symbol: '$', name: 'Dólar EUA' },
+  { code: 'GBP', symbol: '£', name: 'Libra' },
+  { code: 'BRL', symbol: 'R$', name: 'Real' },
+  { code: 'CHF', symbol: 'Fr', name: 'Franco suíço' },
+  { code: 'CAD', symbol: 'C$', name: 'Dólar canadiano' },
+  { code: 'AUD', symbol: 'A$', name: 'Dólar australiano' },
+  { code: 'JPY', symbol: '¥', name: 'Iene' },
 ]
 
 function Shell() {
@@ -68,7 +68,7 @@ function Shell() {
           <label className="currency-select">
             <span>Moeda base</span>
             <select value={baseCurrency} onChange={(e) => changeCurrency(e.target.value)}>
-              {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} · {c.label}</option>)}
+              {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} · {c.symbol}</option>)}
             </select>
           </label>
           <div className="user-chip">
