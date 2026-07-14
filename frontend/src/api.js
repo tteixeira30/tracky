@@ -34,6 +34,17 @@ export const api = {
   // Painel geral
   getDashboard: () => request('/dashboard'),
 
+  // Conquistas
+  getAchievements: () => request('/achievements'),
+
+  // Calendário financeiro
+  getCalendar: (month) => request(`/calendar${month ? `?month=${month}` : ''}`),
+  getUpcoming: (days = 60) => request(`/calendar/upcoming?days=${days}`),
+  addCalendarEvent: (data) => request('/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
+  updateCalendarEvent: (id, data) => request(`/calendar/events/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCalendarEvent: (id) => request(`/calendar/events/${id}`, { method: 'DELETE' }),
+  setBalance: (balance) => request('/calendar/balance', { method: 'PUT', body: JSON.stringify({ balance }) }),
+
   // Moeda
   getCurrency: () => request('/currency'),
   setCurrency: (baseCurrency) => request('/auth/me/currency', { method: 'PUT', body: JSON.stringify({ baseCurrency }) }),

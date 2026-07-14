@@ -152,6 +152,72 @@ export const IconActivity = (p) => (
   </Icon>
 )
 
+export const IconTrophy = (p) => (
+  <Icon {...p}>
+    <path d="M6 9a6 6 0 0 0 12 0V4H6v5z" />
+    <path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3" />
+    <line x1="12" y1="15" x2="12" y2="19" />
+    <path d="M8 21h8M9 21v-2h6v2" />
+  </Icon>
+)
+
+export const IconFlame = (p) => (
+  <Icon {...p}>
+    <path d="M12 2s5 4 5 9a5 5 0 0 1-10 0c0-1.5.5-2.5 1-3.5C8.5 9 9 11 10.5 11c1 0 1.5-1 1-3-.3-1.4.5-4 .5-6z" />
+  </Icon>
+)
+
+export const IconStar = (p) => (
+  <Icon {...p}>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </Icon>
+)
+
+export const IconLock = (p) => (
+  <Icon {...p}>
+    <rect x="3" y="11" width="18" height="11" rx="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </Icon>
+)
+
+export const IconHome = (p) => (
+  <Icon {...p}>
+    <path d="M3 10.5 12 3l9 7.5" />
+    <path d="M5 9.5V21h14V9.5" />
+    <path d="M9 21v-6h6v6" />
+  </Icon>
+)
+
+export const IconRepeat = (p) => (
+  <Icon {...p}>
+    <polyline points="17 1 21 5 17 9" />
+    <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+    <polyline points="7 23 3 19 7 15" />
+    <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+  </Icon>
+)
+
+export const IconBell = (p) => (
+  <Icon {...p}>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </Icon>
+)
+
+export const IconArrowDown = (p) => (
+  <Icon {...p}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <polyline points="19 12 12 19 5 12" />
+  </Icon>
+)
+
+export const IconArrowUp = (p) => (
+  <Icon {...p}>
+    <line x1="12" y1="19" x2="12" y2="5" />
+    <polyline points="5 12 12 5 19 12" />
+  </Icon>
+)
+
 export const IconLogout = (p) => (
   <Icon {...p}>
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

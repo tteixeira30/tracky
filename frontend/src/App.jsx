@@ -3,16 +3,20 @@ import DashboardPage from './pages/DashboardPage'
 import IncomePage from './pages/IncomePage'
 import InvestmentsPage from './pages/InvestmentsPage'
 import GoalsPage from './pages/GoalsPage'
+import CalendarPage from './pages/CalendarPage'
+import AchievementsPage from './pages/AchievementsPage'
 import AuthPage from './pages/AuthPage'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './components/AuthContext'
-import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconLogout } from './components/Icons'
+import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconTrophy, IconLogout } from './components/Icons'
 
 const TABS = [
   { id: 'dashboard', label: 'Painel', icon: IconGrid },
   { id: 'income', label: 'Rendimento', icon: IconWallet },
   { id: 'investments', label: 'Investimentos', icon: IconTrendingUp },
   { id: 'goals', label: 'Objetivos', icon: IconTarget },
+  { id: 'calendar', label: 'Calendário', icon: IconCalendar },
+  { id: 'achievements', label: 'Conquistas', icon: IconTrophy },
 ]
 
 const CURRENCIES = [
@@ -92,6 +96,8 @@ function Shell() {
         {tab === 'income' && <IncomePage />}
         {tab === 'investments' && <InvestmentsPage />}
         {tab === 'goals' && <GoalsPage />}
+        {tab === 'calendar' && <CalendarPage />}
+        {tab === 'achievements' && <AchievementsPage />}
       </main>
       <nav className="bottom-nav" aria-label="Navegação">
         {TABS.map((t) => (

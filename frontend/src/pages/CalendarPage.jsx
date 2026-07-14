@@ -1,0 +1,393 @@
+import { useEffect, useMemo, useState } from 'react'
+import { api, fmtEur, toEur } from '../api'
+import Modal, { ConfirmDialog } from '../components/Modal'
+import DatePicker from '../components/DatePicker'
+import { useToast } from '../components/Toast'
+import {
+  IconWallet, IconHome, IconRepeat, IconBell, IconCoins, IconInfo, IconTrendingUp, IconTarget,
+  IconChevronLeft, IconChevronRight, IconPlus, IconArrowUp, IconArrowDown, IconPencil,
+} from '../components/Icons'
+
+const CATEGORY_META = {
+  INCOME: { label: 'Rendimento', icon: IconWallet },
+  HOUSING: { label: 'Habitação', icon: IconHome },
+  SUBSCRIPTION: { label: 'Subscrição', icon: IconRepeat },
+  BILL: { label: 'Conta / Fatura', icon: IconBell },
+  TRANSPORT: { label: 'Transporte', icon: IconInfo },
+  FOOD: { label: 'Alimentação', icon: IconInfo },
+  SAVING: { label: 'Poupança', icon: IconCoins },
+  OTHER: { label: 'Outro', icon: IconInfo },
+}
+const CATEGORIES = Object.keys(CATEGORY_META)
+const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const SOURCE_ICON = { INVESTMENT: IconTrendingUp, GOAL: IconTarget }
+
+const EMPTY_FORM = { name: '', category: 'OTHER', inflow: false, amount: '', frequency: 'MONTHLY', dayOfMonth: '1', eventDate: '' }
+
+function fmtMonth(m) {
+  if (!m) return ''
+  const [y, mo] = m.split('-').map(Number)
+  const s = new Date(y, mo - 1, 1).toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+const todayIso = () => new Date().toISOString().slice(0, 10)
+const shiftMonth = (m, delta) => {
+  const [y, mo] = m.split('-').map(Number)
+  const d = new Date(y, mo - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function occIcon(o) {
+  if (o.source && SOURCE_ICON[o.source]) return SOURCE_ICON[o.source]
+  return (CATEGORY_META[o.category] || CATEGORY_META.OTHER).icon
+}
+
+export default function CalendarPage() {
+  const toast = useToast()
+  const [month, setMonth] = useState(() => todayIso().slice(0, 7))
+  const [data, setData] = useState(null)
+  const [forecast, setForecast] = useState(null)
+  const [addModal, setAddModal] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [toDelete, setToDelete] = useState(null)
+  const [balanceModal, setBalanceModal] = useState(false)
+  const [balanceInput, setBalanceInput] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const loadMonth = (m) => api.getCalendar(m).then(setData)
+  const loadForecast = () => api.getUpcoming(60).then(setForecast)
+
+  useEffect(() => {
+    loadMonth(month).catch(() => toast.error('Erro', 'Não foi possível carregar o calendário.'))
+  }, [month])
+  useEffect(() => {
+    loadForecast().catch(() => {})
+  }, [])
+
+  const reloadAll = async () => { await Promise.all([loadMonth(month), loadForecast()]) }
+
+  const openAdd = () => { setEditing(null); setForm(EMPTY_FORM); setAddModal(true) }
+  const openEdit = (e) => {
+    setEditing(e)
+    setForm({
+      name: e.name, category: e.category, inflow: e.inflow, amount: String(e.amount),
+      frequency: e.frequency, dayOfMonth: String(e.dayOfMonth || 1), eventDate: e.eventDate || '',
+    })
+    setAddModal(true)
+  }
+
+  const save = async () => {
+    if (!form.name.trim() || !form.amount) {
+      toast.error('Campos em falta', 'Indica o nome e o valor.')
+      return
+    }
+    const payload = {
+      name: form.name.trim(),
+      category: form.category,
+      inflow: form.inflow,
+      amount: toEur(Number(form.amount)),
+      frequency: form.frequency,
+      dayOfMonth: form.frequency === 'MONTHLY' ? Number(form.dayOfMonth) : null,
+      eventDate: form.frequency === 'MONTHLY' ? null : (form.eventDate || null),
+      active: true,
+    }
+    if (form.frequency === 'MONTHLY' && (payload.dayOfMonth < 1 || payload.dayOfMonth > 31)) {
+      toast.error('Dia inválido', 'Indica um dia do mês entre 1 e 31.'); return
+    }
+    if (form.frequency !== 'MONTHLY' && !payload.eventDate) {
+      toast.error('Data em falta', 'Indica a data do evento.'); return
+    }
+    setBusy(true)
+    try {
+      if (editing) await api.updateCalendarEvent(editing.id, payload)
+      else await api.addCalendarEvent(payload)
+      setAddModal(false)
+      await reloadAll()
+      toast.success(editing ? 'Evento atualizado' : 'Evento criado', `"${form.name.trim()}" guardado.`)
+    } catch (e) { toast.error('Erro ao guardar', e.message) }
+    finally { setBusy(false) }
+  }
+
+  const remove = async () => {
+    setBusy(true)
+    try {
+      await api.deleteCalendarEvent(toDelete.id)
+      setToDelete(null)
+      await reloadAll()
+      toast.info('Evento removido', `"${toDelete.name}" foi eliminado.`)
+    } catch (e) { toast.error('Erro ao remover', e.message) }
+    finally { setBusy(false) }
+  }
+
+  const saveBalance = async () => {
+    setBusy(true)
+    try {
+      const val = balanceInput === '' ? null : toEur(Number(balanceInput))
+      await api.setBalance(val)
+      setBalanceModal(false)
+      await loadForecast()
+      toast.success('Saldo atualizado', 'A previsão foi recalculada.')
+    } catch (e) { toast.error('Erro', e.message) }
+    finally { setBusy(false) }
+  }
+
+  // grelha do mês
+  const grid = useMemo(() => {
+    const [y, mo] = month.split('-').map(Number)
+    const lead = (new Date(y, mo - 1, 1).getDay() + 6) % 7
+    const days = new Date(y, mo, 0).getDate()
+    const byDay = {}
+    for (const o of (data?.occurrences || [])) {
+      const d = Number(o.date.slice(8, 10))
+      ;(byDay[d] = byDay[d] || []).push(o)
+    }
+    const cells = []
+    for (let i = 0; i < lead; i++) cells.push(null)
+    for (let d = 1; d <= days; d++) cells.push({ day: d, occ: byDay[d] || [] })
+    while (cells.length % 7 !== 0) cells.push(null)
+    return cells
+  }, [month, data])
+
+  const isToday = (day) => {
+    const t = todayIso()
+    return month === t.slice(0, 7) && day === Number(t.slice(8, 10))
+  }
+
+  if (!data) {
+    return <div className="skeleton" style={{ height: 460, borderRadius: 16 }} />
+  }
+
+  const reminders = (forecast?.points || []).filter((p) => {
+    const days = Math.round((new Date(p.date) - new Date(todayIso())) / 86400000)
+    return days >= 0 && days <= 7
+  })
+
+  return (
+    <div>
+      <div className="page-head">
+        <div>
+          <h2>Calendário financeiro</h2>
+          <p>Eventos recorrentes, previsão de saldo e próximos movimentos.</p>
+        </div>
+        <div className="page-actions">
+          <button className="btn ghost" onClick={() => { setBalanceInput(forecast?.startingBalance != null ? String(forecast.startingBalance) : ''); setBalanceModal(true) }}>
+            <IconWallet size={15} /> Saldo atual
+          </button>
+          <button className="btn" onClick={openAdd}><IconPlus size={15} /> Novo evento</button>
+        </div>
+      </div>
+
+      {reminders.length > 0 && (
+        <div className="reminders">
+          <span className="reminders-title"><IconBell size={14} /> Lembretes · próximos 7 dias</span>
+          <div className="reminders-list">
+            {reminders.map((p, i) => (
+              <span key={i} className={`reminder-chip ${p.inflow ? 'in' : 'out'}`}>
+                {new Date(p.date).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} · {p.name} · {p.inflow ? '+' : '−'}{fmtEur(p.amount)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card">
+        <div className="cal-head">
+          <div className="month-nav">
+            <button className="icon-btn" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Mês anterior"><IconChevronLeft size={18} /></button>
+            <span className="month-label">{fmtMonth(month)}</span>
+            <button className="icon-btn" onClick={() => setMonth((m) => shiftMonth(m, 1))} aria-label="Mês seguinte"><IconChevronRight size={18} /></button>
+          </div>
+          <div className="cal-summary">
+            <span className="pos">↑ {fmtEur(data.inflows)}</span>
+            <span className="neg">↓ {fmtEur(data.outflows)}</span>
+            <span className={Number(data.net) >= 0 ? 'pos' : 'neg'}>= {fmtEur(data.net)}</span>
+          </div>
+        </div>
+
+        <div className="cal-grid">
+          {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
+          {grid.map((cell, i) => (
+            <div key={i} className={`cal-cell ${cell ? '' : 'empty'} ${cell && isToday(cell.day) ? 'today' : ''}`}>
+              {cell && (
+                <>
+                  <span className="cal-daynum">{cell.day}</span>
+                  <div className="cal-dots">
+                    {cell.occ.slice(0, 4).map((o, j) => (
+                      <span key={j} className={`cal-dot ${o.inflow ? 'in' : 'out'}`}
+                            title={`${o.name} · ${o.inflow ? '+' : '−'}${fmtEur(o.amount)}`} />
+                    ))}
+                    {cell.occ.length > 4 && <span className="cal-more">+{cell.occ.length - 4}</span>}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="dash-grid">
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h3><IconTrendingUp size={16} /> Próximos movimentos</h3>
+              <div className="sub">
+                {forecast?.hasBalance
+                  ? `Saldo atual ${fmtEur(forecast.startingBalance)} · previsto a 60 dias ${fmtEur(forecast.endBalance)}`
+                  : 'Fluxo acumulado (define o saldo atual para veres a previsão do saldo)'}
+              </div>
+            </div>
+          </div>
+          {(!forecast || forecast.points.length === 0) ? (
+            <p className="dim" style={{ padding: '4px 2px' }}>Sem movimentos previstos nos próximos 60 dias.</p>
+          ) : (
+            <ul className="timeline">
+              {forecast.points.map((p, i) => {
+                const Icon = occIcon(p)
+                const soon = Math.round((new Date(p.date) - new Date(todayIso())) / 86400000) <= 7
+                return (
+                  <li key={i} className={`tl-item ${soon ? 'soon' : ''}`}>
+                    <div className="tl-date">
+                      <strong>{new Date(p.date).toLocaleDateString('pt-PT', { day: '2-digit' })}</strong>
+                      <span>{new Date(p.date).toLocaleDateString('pt-PT', { month: 'short' })}</span>
+                    </div>
+                    <span className={`tl-icon ${p.inflow ? 'in' : 'out'}`}><Icon size={14} /></span>
+                    <div className="tl-main">
+                      <strong>{p.name}</strong>
+                      {p.source !== 'MANUAL' && <span className="badge">auto</span>}
+                    </div>
+                    <div className="tl-amounts">
+                      <span className={p.inflow ? 'pos' : 'neg'}>{p.inflow ? '+' : '−'}{fmtEur(p.amount)}</span>
+                      {forecast.hasBalance && <span className="tl-balance">{fmtEur(p.balanceAfter)}</span>}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <div><h3><IconRepeat size={16} /> Os teus eventos</h3></div>
+            <button className="btn small ghost" onClick={openAdd}><IconPlus size={13} /> Novo</button>
+          </div>
+          {data.events.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon"><IconBell size={22} /></div>
+              <h4>Ainda sem eventos</h4>
+              <p>Adiciona o teu salário, a renda, subscrições e outras despesas recorrentes.</p>
+            </div>
+          ) : (
+            <ul className="event-list">
+              {data.events.map((e) => {
+                const meta = CATEGORY_META[e.category] || CATEGORY_META.OTHER
+                return (
+                  <li key={e.id} className="event-row">
+                    <span className={`tl-icon ${e.inflow ? 'in' : 'out'}`}><meta.icon size={14} /></span>
+                    <div className="event-main">
+                      <strong>{e.name}</strong>
+                      <span>{meta.label} · {e.frequency === 'MONTHLY' ? `todo dia ${e.dayOfMonth}` : e.frequency === 'YEARLY' ? `anual · ${e.eventDate}` : e.eventDate}</span>
+                    </div>
+                    <span className={e.inflow ? 'pos' : 'neg'}>{e.inflow ? '+' : '−'}{fmtEur(e.amount)}</span>
+                    <div className="event-actions">
+                      <button className="icon-btn" onClick={() => openEdit(e)} aria-label="Editar"><IconPencil size={14} /></button>
+                      <button className="icon-btn danger" onClick={() => setToDelete(e)} aria-label="Eliminar">✕</button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <Modal open={addModal} onClose={() => setAddModal(false)}
+             title={editing ? 'Editar evento' : 'Novo evento'}
+             subtitle="Salário, renda, subscrições ou qualquer movimento recorrente."
+             footer={
+               <>
+                 <button className="btn ghost" onClick={() => setAddModal(false)}>Cancelar</button>
+                 <button className="btn" onClick={save} disabled={busy}>{busy ? 'A guardar…' : 'Guardar'}</button>
+               </>
+             }>
+        <div className="form-grid">
+          <div className="field full">
+            <label>Nome</label>
+            <input placeholder="Ex: Salário, Renda, Netflix" autoFocus value={form.name}
+                   onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Categoria</label>
+            <select value={form.category} onChange={(e) => {
+              const category = e.target.value
+              setForm({ ...form, category, inflow: category === 'INCOME' ? true : form.inflow })
+            }}>
+              {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Tipo</label>
+            <div className="seg">
+              <button type="button" className={form.inflow ? 'active' : ''} onClick={() => setForm({ ...form, inflow: true })}><IconArrowUp size={13} /> Entrada</button>
+              <button type="button" className={!form.inflow ? 'active' : ''} onClick={() => setForm({ ...form, inflow: false })}><IconArrowDown size={13} /> Saída</button>
+            </div>
+          </div>
+          <div className="field">
+            <label>Valor</label>
+            <div className="input-affix">
+              <input type="number" min="0" step="0.01" placeholder="0" value={form.amount}
+                     onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+              <span className="affix">€</span>
+            </div>
+          </div>
+          <div className="field">
+            <label>Frequência</label>
+            <select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}>
+              <option value="MONTHLY">Mensal</option>
+              <option value="YEARLY">Anual</option>
+              <option value="ONCE">Única</option>
+            </select>
+          </div>
+          {form.frequency === 'MONTHLY' ? (
+            <div className="field full">
+              <label>Dia do mês</label>
+              <input type="number" min="1" max="31" value={form.dayOfMonth}
+                     onChange={(e) => setForm({ ...form, dayOfMonth: e.target.value })} />
+            </div>
+          ) : (
+            <div className="field full">
+              <label>Data</label>
+              <DatePicker value={form.eventDate}
+                          onChange={(iso) => setForm({ ...form, eventDate: iso })} />
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <Modal open={balanceModal} onClose={() => setBalanceModal(false)}
+             title="Saldo atual em conta"
+             subtitle="Ponto de partida para a previsão de saldo. Deixa em branco para remover."
+             footer={
+               <>
+                 <button className="btn ghost" onClick={() => setBalanceModal(false)}>Cancelar</button>
+                 <button className="btn" onClick={saveBalance} disabled={busy}>{busy ? 'A guardar…' : 'Guardar'}</button>
+               </>
+             }>
+        <div className="field full">
+          <label>Saldo</label>
+          <div className="input-affix">
+            <input type="number" step="0.01" placeholder="Ex: 2500" autoFocus value={balanceInput}
+                   onChange={(e) => setBalanceInput(e.target.value)} />
+            <span className="affix">€</span>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog open={!!toDelete} busy={busy}
+                     title="Eliminar evento?"
+                     message={`"${toDelete?.name}" vai ser eliminado do calendário.`}
+                     onConfirm={remove} onCancel={() => setToDelete(null)} />
+    </div>
+  )
+}
