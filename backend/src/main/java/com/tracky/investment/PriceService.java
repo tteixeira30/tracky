@@ -59,6 +59,15 @@ public class PriceService {
     }
 
     /**
+     * Descarta o preço em cache de um ativo, para forçar nova cotação no próximo pedido.
+     * Usado pelo refresh manual — permite ler dados em tempo real sem esperar pelo TTL.
+     */
+    public void evictPrice(String symbol, Investment.Type type) {
+        if (symbol == null || symbol.isBlank() || type == null) return;
+        priceCache.remove(type + ":" + symbol.toUpperCase(Locale.ROOT));
+    }
+
+    /**
      * Série diária de preços em EUR para o intervalo pedido.
      * range: 1mo, 3mo, 6mo, 1y
      */

@@ -9,6 +9,17 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <title>Tracky</title>
+    <script>
+      // Aplica o tema antes do primeiro paint para evitar flash ao carregar.
+      (function () {
+        try {
+          var saved = localStorage.getItem('tracky_theme');
+          var theme = (saved === 'light' || saved === 'dark') ? saved
+            : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api, fmtEur, fmtPct, fmtMoneyShort } from '../api'
 import { useAuth } from '../components/AuthContext'
+import { useChartColors } from '../components/ThemeContext'
 import {
   IconWallet, IconTrendingUp, IconTarget, IconCheck, IconInfo,
-  IconSparkle, IconCoins, IconActivity,
+  IconSparkle, IconCoins, IconActivity, IconArrowUp, IconArrowDown, IconCalendar,
 } from '../components/Icons'
 
 const INSIGHT_ICONS = {
@@ -51,6 +52,7 @@ function timeAgo(iso) {
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const chart = useChartColors()
   const [data, setData] = useState(null)
   const [error, setError] = useState(false)
 
@@ -73,10 +75,11 @@ export default function DashboardPage() {
   if (!data) {
     return (
       <div>
+        <div className="skeleton" style={{ height: 236, borderRadius: 16, marginBottom: 20 }} />
         <div className="kpi-grid">
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 118 }} />)}
         </div>
-        <div className="skeleton" style={{ height: 300, marginTop: 20, borderRadius: 16 }} />
+        <div className="skeleton" style={{ height: 240, marginTop: 20, borderRadius: 16 }} />
       </div>
     )
   }
@@ -85,67 +88,82 @@ export default function DashboardPage() {
   const gainPositive = Number(data.investmentGainPercent) >= 0
   const evolution = (data.evolution || []).map((p) => ({ ...p, value: Number(p.value) }))
 
-  const kpis = [
-    {
-      key: 'net', label: 'Património líquido', icon: IconCoins,
-      value: fmtEur(data.netWorth), tone: 'accent',
-      sub: 'Investimentos + poupança em objetivos',
-    },
-    {
-      key: 'income', label: data.incomeMonth ? `Rendimento · ${fmtMonth(data.incomeMonth)}` : 'Rendimento do mês', icon: IconWallet,
-      value: fmtEur(data.monthlyIncome),
-      sub: Number(data.unallocated) > 0 ? `${fmtEur(data.unallocated)} por alocar` : 'Totalmente distribuído',
-    },
-    {
-      key: 'invested', label: 'Valor investido', icon: IconTrendingUp,
-      value: fmtEur(data.totalInvested),
-      sub: <span className={gainPositive ? 'pos' : 'neg'}>{fmtPct(data.investmentGainPercent)} · {fmtEur(data.investmentGain)}</span>,
-    },
-    {
-      key: 'goals', label: 'Objetivos', icon: IconTarget,
-      value: `${data.goalsProgressPercent}%`,
-      sub: `${data.goalsCompleted}/${data.goalsCount} concluídos · ${fmtEur(data.totalSaved)} poupados`,
-    },
-  ]
+  // variação do património ao longo da janela (primeiro → último ponto do histórico)
+  const hasEvo = evolution.length >= 2
+  const evoFirst = hasEvo ? evolution[0].value : 0
+  const evoLast = hasEvo ? evolution[evolution.length - 1].value : 0
+  const deltaAbs = evoLast - evoFirst
+  const deltaPct = evoFirst > 0 ? (deltaAbs / evoFirst) * 100 : null
+  const deltaUp = deltaAbs >= 0
+
+  // composição do património: investimentos vs poupança em objetivos
+  const invested = Number(data.totalInvested) || 0
+  const saved = Number(data.totalSaved) || 0
+  const compTotal = invested + saved
+  const investPct = compTotal > 0 ? (invested / compTotal) * 100 : 0
+  const savedPct = compTotal > 0 ? (saved / compTotal) * 100 : 0
+
+  const goalsPct = Math.max(0, Math.min(100, Number(data.goalsProgressPercent) || 0))
 
   return (
     <div>
       <div className="page-head">
         <div>
-          <h2>Olá{firstName ? `, ${firstName}` : ''} 👋</h2>
+          <h2>Olá{firstName ? `, ${firstName}` : ''}</h2>
           <p>Aqui está o resumo das tuas finanças.</p>
         </div>
+        {data.incomeMonth && (
+          <span className="month-chip"><IconCalendar size={14} /> {fmtMonth(data.incomeMonth)}</span>
+        )}
       </div>
 
-      <div className="kpi-grid">
-        {kpis.map((k) => (
-          <div className={`card kpi-card ${k.tone || ''}`} key={k.key}>
-            <div className="kpi-top">
-              <span className="kpi-icon"><k.icon size={17} /></span>
-              <span className="kpi-label">{k.label}</span>
-            </div>
-            <div className="kpi-value">{k.value}</div>
-            <div className="kpi-sub">{k.sub}</div>
-          </div>
-        ))}
-      </div>
+      <div className="card dash-hero">
+        <div className="hero-main">
+          <span className="hero-eyebrow"><IconCoins size={15} /> Património líquido</span>
+          <div className="hero-value">{fmtEur(data.netWorth)}</div>
+          {hasEvo && (
+            <span className={`delta-chip ${deltaAbs === 0 ? 'flat' : deltaUp ? 'up' : 'down'}`}>
+              {deltaUp ? <IconArrowUp size={13} /> : <IconArrowDown size={13} />}
+              {deltaPct != null && `${deltaUp ? '+' : ''}${deltaPct.toFixed(1)}%`}
+              <span className="delta-abs">{deltaUp ? '+' : '−'}{fmtEur(Math.abs(deltaAbs))} · 6 meses</span>
+            </span>
+          )}
 
-      <div className="dash-grid">
-        <div className="card dash-chart">
-          <div className="card-header">
-            <div>
-              <h3>Evolução do património</h3>
-              <div className="sub">Últimos 6 meses · portefólio + poupança</div>
-            </div>
-          </div>
-          {evolution.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon"><IconTrendingUp size={24} /></div>
-              <h4>Sem histórico ainda</h4>
-              <p>Adiciona investimentos com símbolo (ex: VWCE.DE, BTC) para veres a evolução ao longo do tempo.</p>
+          {compTotal > 0 ? (
+            <div className="composition">
+              <div className="comp-bar">
+                {investPct > 0 && <span className="comp-seg" style={{ width: `${investPct}%`, background: 'var(--accent)' }} />}
+                {savedPct > 0 && <span className="comp-seg" style={{ width: `${savedPct}%`, background: 'var(--cyan)' }} />}
+              </div>
+              <div className="comp-legend">
+                <span className="comp-item">
+                  <span className="comp-dot" style={{ background: 'var(--accent)' }} />
+                  Investimentos <strong>{fmtEur(invested)}</strong> <span className="dim">{investPct.toFixed(0)}%</span>
+                </span>
+                <span className="comp-item">
+                  <span className="comp-dot" style={{ background: 'var(--cyan)' }} />
+                  Poupança <strong>{fmtEur(saved)}</strong> <span className="dim">{savedPct.toFixed(0)}%</span>
+                </span>
+              </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <p className="hint" style={{ marginTop: 14 }}>Adiciona investimentos ou objetivos para veres a composição do teu património.</p>
+          )}
+        </div>
+
+        <div className="hero-chart">
+          <div className="hero-chart-head">
+            <span>Evolução do património</span>
+            <span className="dim">6 meses</span>
+          </div>
+          {evolution.length === 0 ? (
+            <div className="empty-state compact">
+              <div className="empty-icon"><IconTrendingUp size={22} /></div>
+              <h4>Sem histórico ainda</h4>
+              <p>Adiciona investimentos com símbolo (ex: VWCE.DE, BTC) para veres a evolução.</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={evolution} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="dash-grad" x1="0" y1="0" x2="0" y2="1">
@@ -153,10 +171,10 @@ export default function DashboardPage() {
                     <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#232936" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" stroke="#5c6478" fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
+                <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" stroke={chart.axis} fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
                        tickFormatter={(d) => new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} />
-                <YAxis stroke="#5c6478" fontSize={11.5} axisLine={false} tickLine={false} width={72}
+                <YAxis stroke={chart.axis} fontSize={11.5} axisLine={false} tickLine={false} width={72}
                        tickFormatter={fmtMoneyShort} domain={['auto', 'auto']} />
                 <Tooltip content={<ChartTooltip />} />
                 <Area type="monotone" dataKey="value" stroke="#22d3ee" strokeWidth={2.2} fill="url(#dash-grad)"
@@ -165,7 +183,60 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           )}
         </div>
+      </div>
 
+      <div className="kpi-grid">
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-icon"><IconWallet size={17} /></span>
+            <span className="kpi-label">Rendimento do mês</span>
+          </div>
+          <div className="kpi-value">{fmtEur(data.monthlyIncome)}</div>
+          <div className="kpi-sub">
+            {Number(data.unallocated) > 0 ? `${fmtEur(data.unallocated)} por alocar` : 'Totalmente distribuído'}
+          </div>
+        </div>
+
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-icon"><IconTrendingUp size={17} /></span>
+            <span className="kpi-label">Valor investido</span>
+          </div>
+          <div className="kpi-value">{fmtEur(data.totalInvested)}</div>
+          <div className="kpi-sub">
+            <span className={gainPositive ? 'pos' : 'neg'}>{fmtPct(data.investmentGainPercent)} · {fmtEur(data.investmentGain)}</span>
+          </div>
+        </div>
+
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-icon"><IconCoins size={17} /></span>
+            <span className="kpi-label">Poupado em objetivos</span>
+          </div>
+          <div className="kpi-value">{fmtEur(data.totalSaved)}</div>
+          <div className="kpi-sub">
+            {Number(data.totalGoalsTarget) > 0 ? `de ${fmtEur(data.totalGoalsTarget)} em metas` : 'Sem metas definidas'}
+          </div>
+        </div>
+
+        <div className="card kpi-card">
+          <div className="kpi-top">
+            <span className="kpi-icon"><IconTarget size={17} /></span>
+            <span className="kpi-label">Objetivos</span>
+          </div>
+          <div className="kpi-ring-row">
+            <div className="kpi-ring" style={{ background: `conic-gradient(var(--accent) ${goalsPct * 3.6}deg, var(--surface-3) 0)` }}>
+              <span>{Math.round(goalsPct)}%</span>
+            </div>
+            <div className="kpi-ring-meta">
+              <strong>{data.goalsCompleted}/{data.goalsCount}</strong>
+              <span className="dim">concluídos</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="dash-grid">
         <div className="card dash-side">
           <div className="card-header">
             <div><h3><IconSparkle size={16} /> Insights</h3></div>
@@ -189,31 +260,31 @@ export default function DashboardPage() {
             </ul>
           )}
         </div>
-      </div>
 
-      <div className="card dash-activity">
-        <div className="card-header">
-          <div><h3><IconActivity size={16} /> Atividade recente</h3></div>
+        <div className="card dash-activity">
+          <div className="card-header">
+            <div><h3><IconActivity size={16} /> Atividade recente</h3></div>
+          </div>
+          {data.recentActivity.length === 0 ? (
+            <p className="dim" style={{ padding: '4px 2px' }}>Ainda sem atividade registada.</p>
+          ) : (
+            <ul className="activity-list">
+              {data.recentActivity.map((a, i) => {
+                const Icon = ACTIVITY_ICONS[a.type] || IconInfo
+                return (
+                  <li key={i} className="activity">
+                    <span className={`activity-icon ${a.type}`}><Icon size={15} /></span>
+                    <div className="activity-main">
+                      <strong>{a.title}</strong>
+                      <span>{a.subtitle}</span>
+                    </div>
+                    <span className="activity-time">{timeAgo(a.at)}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
-        {data.recentActivity.length === 0 ? (
-          <p className="dim" style={{ padding: '4px 2px' }}>Ainda sem atividade registada.</p>
-        ) : (
-          <ul className="activity-list">
-            {data.recentActivity.map((a, i) => {
-              const Icon = ACTIVITY_ICONS[a.type] || IconInfo
-              return (
-                <li key={i} className="activity">
-                  <span className={`activity-icon ${a.type}`}><Icon size={15} /></span>
-                  <div className="activity-main">
-                    <strong>{a.title}</strong>
-                    <span>{a.subtitle}</span>
-                  </div>
-                  <span className="activity-time">{timeAgo(a.at)}</span>
-                </li>
-              )
-            })}
-          </ul>
-        )}
       </div>
     </div>
   )

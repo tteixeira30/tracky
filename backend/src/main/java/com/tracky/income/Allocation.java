@@ -32,6 +32,9 @@ public class Allocation {
     @Column(precision = 19, scale = 2)
     private BigDecimal fixedAmount;
 
+    /** Cor da categoria em hexadecimal (ex: #6366f1). Null → usa a cor por omissão da paleta. */
+    private String color;
+
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
@@ -43,4 +46,6 @@ public class Allocation {
     public void setPercentage(BigDecimal percentage) { this.percentage = percentage; }
     public BigDecimal getFixedAmount() { return fixedAmount; }
     public void setFixedAmount(BigDecimal fixedAmount) { this.fixedAmount = fixedAmount; }
+    public String getColor() { return color; }
+    public void setColor(String color) { this.color = color; }
 }

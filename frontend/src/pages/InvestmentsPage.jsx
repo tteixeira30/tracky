@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { api, fmtEur, fmtPct, fmtMoneyShort } from '../api'
+import { api, fmtEur, fmtPct, fmtMoneyShort, toEur, fromEur, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import Dropdown from '../components/Dropdown'
+import { useChartColors } from '../components/ThemeContext'
 import { useToast } from '../components/Toast'
 import { IconCoins, IconPencil, IconPlus, IconRefresh, IconTrendingUp, IconWallet, IconSparkle } from '../components/Icons'
 
@@ -78,6 +79,8 @@ function ChartTooltip({ active, payload, label }) {
 
 export default function InvestmentsPage() {
   const toast = useToast()
+  const chart = useChartColors()
+  const cur = getCurrencySymbol()
   const [portfolio, setPortfolio] = useState(null)
   const [history, setHistory] = useState(null)
   const [range, setRange] = useState('3mo')
@@ -124,7 +127,7 @@ export default function InvestmentsPage() {
     }
     setProjParams({
       months: Math.min(projUnit === 'anos' ? h * 12 : h, 600),
-      monthly: Number(projMonthly) || 0,
+      monthly: toEur(Number(projMonthly) || 0),
       rate: projRate === '' ? null : Number(projRate),
     })
   }
@@ -132,7 +135,10 @@ export default function InvestmentsPage() {
   const refresh = async () => {
     setRefreshing(true)
     try {
-      await load()
+      // força novas cotações no servidor (ignora a cache) em vez de reutilizar preços recentes
+      setPortfolio(await api.refreshInvestments())
+      setHistory(null)
+      api.getPortfolioHistory(range).then(setHistory).catch(() => setHistory([]))
       toast.info('Cotações atualizadas', 'Preços obtidos em tempo real.')
     } catch { toast.error('Erro', 'Não foi possível atualizar as cotações.') }
     finally { setRefreshing(false) }
@@ -149,9 +155,9 @@ export default function InvestmentsPage() {
         name: form.name.trim(),
         symbol: form.symbol.trim() || null,
         type: form.type,
-        currentValue: Number(form.currentValue),
+        currentValue: toEur(Number(form.currentValue)),
         gainPercent: Number(form.gainPercent) || 0,
-        monthlyContribution: Number(form.monthlyContribution) || null,
+        monthlyContribution: Number(form.monthlyContribution) ? toEur(Number(form.monthlyContribution)) : null,
       })
       setAddModal(false)
       setForm(EMPTY_FORM)
@@ -173,9 +179,9 @@ export default function InvestmentsPage() {
       name: inv.name,
       symbol: inv.symbol || '',
       type: inv.type,
-      currentValue: String(inv.currentValue ?? ''),
+      currentValue: inv.currentValue != null ? String(fromEur(inv.currentValue)) : '',
       gainPercent: String(inv.gainPercent ?? 0),
-      monthlyContribution: inv.monthlyContribution != null ? String(inv.monthlyContribution) : '',
+      monthlyContribution: inv.monthlyContribution != null ? String(fromEur(inv.monthlyContribution)) : '',
     })
   }
 
@@ -190,9 +196,9 @@ export default function InvestmentsPage() {
         name: editForm.name.trim(),
         symbol: editForm.type === 'OTHER' ? null : (editForm.symbol.trim() || null),
         type: editForm.type,
-        currentValue: Number(editForm.currentValue),
+        currentValue: toEur(Number(editForm.currentValue)),
         gainPercent: Number(editForm.gainPercent) || 0,
-        monthlyContribution: Number(editForm.monthlyContribution) || null,
+        monthlyContribution: Number(editForm.monthlyContribution) ? toEur(Number(editForm.monthlyContribution)) : null,
       })
       setEditing(null)
       await load()
@@ -323,10 +329,10 @@ export default function InvestmentsPage() {
                   <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#232936" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" stroke="#5c6478" fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
+              <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" stroke={chart.axis} fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
                      tickFormatter={(d) => new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} />
-              <YAxis stroke="#5c6478" fontSize={11.5} axisLine={false} tickLine={false} width={72}
+              <YAxis stroke={chart.axis} fontSize={11.5} axisLine={false} tickLine={false} width={72}
                      tickFormatter={fmtMoneyShort} domain={['auto', 'auto']} />
               <Tooltip content={<ChartTooltip />} />
               <Area type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2.2} fill="url(#grad)"
@@ -373,7 +379,7 @@ export default function InvestmentsPage() {
               <input type="number" min="0" step="10" placeholder="0" value={projMonthly}
                      onChange={(e) => setProjMonthly(e.target.value)}
                      onKeyDown={(e) => e.key === 'Enter' && applyProjection()} aria-label="Reforço mensal" />
-              <span className="affix">€/mês</span>
+              <span className="affix">{cur}/mês</span>
             </div>
           </div>
           <div className="proj-field">
@@ -417,13 +423,13 @@ export default function InvestmentsPage() {
             <>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="#232936" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" stroke="#5c6478" fontSize={11.5} tickMargin={10}
+                  <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" stroke={chart.axis} fontSize={11.5} tickMargin={10}
                          axisLine={false} tickLine={false} minTickGap={48} ticks={yearTicks}
                          tickFormatter={(m) => longHorizon
                            ? projectionDate(m).getFullYear()
                            : projectionDate(m).toLocaleDateString('pt-PT', { month: 'short', year: '2-digit' })} />
-                  <YAxis stroke="#5c6478" fontSize={11.5} axisLine={false} tickLine={false} width={78}
+                  <YAxis stroke={chart.axis} fontSize={11.5} axisLine={false} tickLine={false} width={78}
                          tickFormatter={fmtMoneyShort}
                          domain={['auto', 'auto']} />
                   <Tooltip content={<ProjectionTooltip />} />
@@ -473,7 +479,7 @@ export default function InvestmentsPage() {
         <div className="card-header">
           <div>
             <h3>Os meus ativos</h3>
-            <div className="sub">Cotações atualizadas ao minuto e convertidas para EUR</div>
+            <div className="sub">Cotações atualizadas ao minuto e convertidas para a moeda base</div>
           </div>
         </div>
         {investments.length === 0 ? (
@@ -567,7 +573,7 @@ export default function InvestmentsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="0.01" placeholder="Ex: 1500" value={form.currentValue}
                      onChange={(e) => setForm({ ...form, currentValue: e.target.value })} />
-              <span className="affix">€</span>
+              <span className="affix">{cur}</span>
             </div>
           </div>
           <div className="field">
@@ -579,7 +585,7 @@ export default function InvestmentsPage() {
             </div>
             {form.currentValue && form.gainPercent && Number(form.gainPercent) > -100 && (
               <span className="hint">
-                Investimento inicial ≈ {fmtEur(Number(form.currentValue) / (1 + Number(form.gainPercent) / 100))}
+                Investimento inicial ≈ {fmtEur(toEur(Number(form.currentValue)) / (1 + Number(form.gainPercent) / 100))}
               </span>
             )}
           </div>
@@ -588,7 +594,7 @@ export default function InvestmentsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="10" placeholder="Ex: 100" value={form.monthlyContribution}
                      onChange={(e) => setForm({ ...form, monthlyContribution: e.target.value })} />
-              <span className="affix">€/mês</span>
+              <span className="affix">{cur}/mês</span>
             </div>
             <span className="hint">
               Adicionado ao investimento no dia 1 de cada mês (ou com o botão "Simular reforço mensal").
@@ -639,7 +645,7 @@ export default function InvestmentsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="0.01" value={editForm.currentValue}
                      onChange={(e) => setEditForm({ ...editForm, currentValue: e.target.value })} />
-              <span className="affix">€</span>
+              <span className="affix">{cur}</span>
             </div>
           </div>
           <div className="field">
@@ -651,7 +657,7 @@ export default function InvestmentsPage() {
             </div>
             {editForm.currentValue && editForm.gainPercent && Number(editForm.gainPercent) > -100 && (
               <span className="hint">
-                Investimento inicial ≈ {fmtEur(Number(editForm.currentValue) / (1 + Number(editForm.gainPercent) / 100))}
+                Investimento inicial ≈ {fmtEur(toEur(Number(editForm.currentValue)) / (1 + Number(editForm.gainPercent) / 100))}
               </span>
             )}
           </div>
@@ -660,7 +666,7 @@ export default function InvestmentsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="10" placeholder="Sem reforço" value={editForm.monthlyContribution}
                      onChange={(e) => setEditForm({ ...editForm, monthlyContribution: e.target.value })} />
-              <span className="affix">€/mês</span>
+              <span className="affix">{cur}/mês</span>
             </div>
             <span className="hint">Deixa vazio ou 0 para desativar o reforço mensal.</span>
           </div>
