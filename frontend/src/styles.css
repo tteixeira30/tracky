@@ -1278,6 +1278,8 @@ tr.alloc-open .row-title { font-weight: 600; }
   border-radius: var(--radius); box-shadow: var(--shadow);
   max-height: 260px; overflow-y: auto;
 }
+/* abre para cima quando não há espaço em baixo (ex: seletor no fundo da barra lateral) */
+.dropdown.up .dd-pop { top: auto; bottom: calc(100% + 6px); }
 .dd-option {
   display: block; width: 100%; text-align: left;
   padding: 9px 11px; border: none; border-radius: var(--radius-sm);

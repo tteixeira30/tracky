@@ -18,7 +18,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 interface IncomeSettingsRepository extends JpaRepository<IncomeSettings, Long> {
-    Optional<IncomeSettings> findByUserIdAndMonth(Long userId, String month);
+    // devolve lista (não Optional) por não haver constraint única em (user_id, month):
+    // linhas duplicadas — ex: escritas concorrentes num mês novo — não podem rebentar a leitura
+    List<IncomeSettings> findByUserIdAndMonthOrderByIdAsc(Long userId, String month);
     List<IncomeSettings> findByUserIdOrderByMonthAsc(Long userId);
     List<IncomeSettings> findByUserIdAndMonthIsNull(Long userId);
 }
@@ -101,8 +103,21 @@ public class IncomeController {
                 .reduce((first, second) -> second);
     }
 
+    /**
+     * Rendimento de um mês, tolerante a duplicados. Como não há constraint única em
+     * (user_id, month), duas escritas concorrentes podem criar linhas repetidas; aqui
+     * ficamos com a primeira e removemos as restantes (auto-limpeza, à semelhança de
+     * migrateLegacyRows) para a leitura nunca rebentar.
+     */
+    private Optional<IncomeSettings> findSettings(Long userId, String month) {
+        List<IncomeSettings> rows = incomeRepo.findByUserIdAndMonthOrderByIdAsc(userId, month);
+        if (rows.isEmpty()) return Optional.empty();
+        if (rows.size() > 1) incomeRepo.deleteAll(rows.subList(1, rows.size()));
+        return Optional.of(rows.get(0));
+    }
+
     private IncomeSettings getOrCreate(User user, String month) {
-        return incomeRepo.findByUserIdAndMonth(user.getId(), month).orElseGet(() -> {
+        return findSettings(user.getId(), month).orElseGet(() -> {
             IncomeSettings s = new IncomeSettings();
             s.setUserId(user.getId());
             s.setMonth(month);
@@ -120,7 +135,7 @@ public class IncomeController {
         String current = currentMonth();
         String copiedFrom = null;
 
-        Optional<IncomeSettings> existing = incomeRepo.findByUserIdAndMonth(user.getId(), m);
+        Optional<IncomeSettings> existing = findSettings(user.getId(), m);
 
         // ao entrar num mês novo (o atual), arranca com as categorias e o rendimento do mês anterior
         if (existing.isEmpty() && m.equals(current)) {
