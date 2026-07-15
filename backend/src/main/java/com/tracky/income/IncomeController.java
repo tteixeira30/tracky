@@ -33,7 +33,6 @@ interface AllocationItemRepository extends JpaRepository<AllocationItem, Long> {
     List<AllocationItem> findByAllocationIdOrderByIdAsc(Long allocationId);
     List<AllocationItem> findByUserIdAndAllocationIdInOrderByIdAsc(Long userId, List<Long> allocationIds);
     Optional<AllocationItem> findByIdAndUserId(Long id, Long userId);
-    void deleteByAllocationId(Long allocationId);
 }
 
 @RestController
@@ -202,7 +201,9 @@ public class IncomeController {
         Optional<Allocation> a = allocationRepo.findByIdAndUserId(id, user.getId());
         String m = a.map(Allocation::getMonth).orElse(null);
         a.ifPresent(alloc -> {
-            itemRepo.deleteByAllocationId(alloc.getId());
+            // deleteAll(Iterable) é transacional por omissão — ao contrário de um
+            // deleteBy... derivado, que exigiria transação própria (não há service layer)
+            itemRepo.deleteAll(itemRepo.findByAllocationIdOrderByIdAsc(alloc.getId()));
             allocationRepo.delete(alloc);
         });
         return get(user, m);
