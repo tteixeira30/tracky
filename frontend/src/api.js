@@ -60,9 +60,13 @@ export const api = {
   addAllocation: (data, month) => request(`/income/allocations${month ? `?month=${month}` : ''}`, { method: 'POST', body: JSON.stringify(data) }),
   updateAllocation: (id, data) => request(`/income/allocations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteAllocation: (id) => request(`/income/allocations/${id}`, { method: 'DELETE' }),
+  addAllocationItem: (allocId, data) => request(`/income/allocations/${allocId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  updateAllocationItem: (id, data) => request(`/income/allocations/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAllocationItem: (id) => request(`/income/allocations/items/${id}`, { method: 'DELETE' }),
 
   // Investimentos
   getInvestments: () => request('/investments'),
+  refreshInvestments: () => request('/investments/refresh', { method: 'POST' }),
   addInvestment: (data) => request('/investments', { method: 'POST', body: JSON.stringify(data) }),
   updateInvestment: (id, data) => request(`/investments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteInvestment: (id) => request(`/investments/${id}`, { method: 'DELETE' }),
@@ -97,11 +101,26 @@ export const setDisplayCurrency = (currency, rateFromEur) => {
 }
 export const getDisplayCurrency = () => displayCurrency
 
+// Símbolos das moedas suportadas — usados nos afixos dos campos de input.
+export const CURRENCY_SYMBOLS = {
+  EUR: '€', USD: '$', GBP: '£', BRL: 'R$', CHF: 'Fr', CAD: 'C$', AUD: 'A$', JPY: '¥',
+}
+
+/** Símbolo da moeda base ativa (ex: '€', '$'), para rótulos de campos monetários. */
+export const getCurrencySymbol = () => CURRENCY_SYMBOLS[displayCurrency] || displayCurrency
+
 /** Converte um valor introduzido na moeda base para EUR (para enviar ao backend). */
 export const toEur = (baseValue) => {
   const n = Number(baseValue)
   if (!Number.isFinite(n)) return baseValue
   return displayRate === 1 ? n : n / displayRate
+}
+
+/** Converte um valor em EUR (do backend) para a moeda base, para pré-preencher inputs. */
+export const fromEur = (eurValue) => {
+  const n = Number(eurValue)
+  if (!Number.isFinite(n)) return eurValue
+  return displayRate === 1 ? n : Math.round(n * displayRate * 100) / 100
 }
 
 /** Formata um valor em EUR, convertido e apresentado na moeda base. */

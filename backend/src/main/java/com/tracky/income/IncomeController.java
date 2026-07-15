@@ -18,7 +18,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 interface IncomeSettingsRepository extends JpaRepository<IncomeSettings, Long> {
-    Optional<IncomeSettings> findByUserIdAndMonth(Long userId, String month);
+    // devolve lista (não Optional) por não haver constraint única em (user_id, month):
+    // linhas duplicadas — ex: escritas concorrentes num mês novo — não podem rebentar a leitura
+    List<IncomeSettings> findByUserIdAndMonthOrderByIdAsc(Long userId, String month);
     List<IncomeSettings> findByUserIdOrderByMonthAsc(Long userId);
     List<IncomeSettings> findByUserIdAndMonthIsNull(Long userId);
 }
@@ -29,6 +31,12 @@ interface AllocationRepository extends JpaRepository<Allocation, Long> {
     Optional<Allocation> findByIdAndUserId(Long id, Long userId);
 }
 
+interface AllocationItemRepository extends JpaRepository<AllocationItem, Long> {
+    List<AllocationItem> findByAllocationIdOrderByIdAsc(Long allocationId);
+    List<AllocationItem> findByUserIdAndAllocationIdInOrderByIdAsc(Long userId, List<Long> allocationIds);
+    Optional<AllocationItem> findByIdAndUserId(Long id, Long userId);
+}
+
 @RestController
 @RequestMapping("/api/income")
 public class IncomeController {
@@ -37,21 +45,28 @@ public class IncomeController {
 
     private final IncomeSettingsRepository incomeRepo;
     private final AllocationRepository allocationRepo;
+    private final AllocationItemRepository itemRepo;
 
-    public IncomeController(IncomeSettingsRepository incomeRepo, AllocationRepository allocationRepo) {
+    public IncomeController(IncomeSettingsRepository incomeRepo, AllocationRepository allocationRepo,
+                            AllocationItemRepository itemRepo) {
         this.incomeRepo = incomeRepo;
         this.allocationRepo = allocationRepo;
+        this.itemRepo = itemRepo;
     }
 
+    public record AllocationItemDto(Long id, String name, BigDecimal amount) {}
     public record AllocationDto(Long id, String name, BigDecimal percentage, BigDecimal fixedAmount,
-                                BigDecimal amount, BigDecimal effectivePercentage) {}
+                                BigDecimal amount, BigDecimal effectivePercentage,
+                                List<AllocationItemDto> items, BigDecimal itemsTotal, String color) {}
     public record IncomeResponse(String month, boolean current, BigDecimal monthlyIncome,
                                  List<AllocationDto> allocations, BigDecimal totalAllocated,
                                  BigDecimal totalPercentage, BigDecimal unallocated,
                                  List<String> availableMonths, String copiedFrom) {}
     public record IncomeRequest(@NotNull BigDecimal monthlyIncome) {}
-    /** Ou percentage ou fixedAmount — exatamente um dos dois. */
-    public record AllocationRequest(@NotBlank String name, BigDecimal percentage, BigDecimal fixedAmount) {}
+    /** Ou percentage ou fixedAmount — exatamente um dos dois. color é opcional (hex). */
+    public record AllocationRequest(@NotBlank String name, BigDecimal percentage, BigDecimal fixedAmount,
+                                    String color) {}
+    public record AllocationItemRequest(@NotBlank String name, @NotNull BigDecimal amount) {}
 
     // ---------- helpers ----------
 
@@ -88,8 +103,21 @@ public class IncomeController {
                 .reduce((first, second) -> second);
     }
 
+    /**
+     * Rendimento de um mês, tolerante a duplicados. Como não há constraint única em
+     * (user_id, month), duas escritas concorrentes podem criar linhas repetidas; aqui
+     * ficamos com a primeira e removemos as restantes (auto-limpeza, à semelhança de
+     * migrateLegacyRows) para a leitura nunca rebentar.
+     */
+    private Optional<IncomeSettings> findSettings(Long userId, String month) {
+        List<IncomeSettings> rows = incomeRepo.findByUserIdAndMonthOrderByIdAsc(userId, month);
+        if (rows.isEmpty()) return Optional.empty();
+        if (rows.size() > 1) incomeRepo.deleteAll(rows.subList(1, rows.size()));
+        return Optional.of(rows.get(0));
+    }
+
     private IncomeSettings getOrCreate(User user, String month) {
-        return incomeRepo.findByUserIdAndMonth(user.getId(), month).orElseGet(() -> {
+        return findSettings(user.getId(), month).orElseGet(() -> {
             IncomeSettings s = new IncomeSettings();
             s.setUserId(user.getId());
             s.setMonth(month);
@@ -107,7 +135,7 @@ public class IncomeController {
         String current = currentMonth();
         String copiedFrom = null;
 
-        Optional<IncomeSettings> existing = incomeRepo.findByUserIdAndMonth(user.getId(), m);
+        Optional<IncomeSettings> existing = findSettings(user.getId(), m);
 
         // ao entrar num mês novo (o atual), arranca com as categorias e o rendimento do mês anterior
         if (existing.isEmpty() && m.equals(current)) {
@@ -126,7 +154,17 @@ public class IncomeController {
                     copy.setName(a.getName());
                     copy.setPercentage(a.getPercentage());
                     copy.setFixedAmount(a.getFixedAmount());
+                    copy.setColor(a.getColor());
                     allocationRepo.save(copy);
+                    // os itens (ex: subscrições) recorrem — copia-os para o novo mês
+                    for (AllocationItem it : itemRepo.findByAllocationIdOrderByIdAsc(a.getId())) {
+                        AllocationItem itCopy = new AllocationItem();
+                        itCopy.setUserId(user.getId());
+                        itCopy.setAllocationId(copy.getId());
+                        itCopy.setName(it.getName());
+                        itCopy.setAmount(it.getAmount());
+                        itemRepo.save(itCopy);
+                    }
                 }
                 if (!prevAllocs.isEmpty()) copiedFrom = previous.get().getMonth();
             }
@@ -179,8 +217,59 @@ public class IncomeController {
     public IncomeResponse deleteAllocation(@AuthenticationPrincipal User user, @PathVariable Long id) {
         Optional<Allocation> a = allocationRepo.findByIdAndUserId(id, user.getId());
         String m = a.map(Allocation::getMonth).orElse(null);
-        a.ifPresent(allocationRepo::delete);
+        a.ifPresent(alloc -> {
+            // deleteAll(Iterable) é transacional por omissão — ao contrário de um
+            // deleteBy... derivado, que exigiria transação própria (não há service layer)
+            itemRepo.deleteAll(itemRepo.findByAllocationIdOrderByIdAsc(alloc.getId()));
+            allocationRepo.delete(alloc);
+        });
         return get(user, m);
+    }
+
+    // ---------- itens da categoria ----------
+
+    @PostMapping("/allocations/{allocId}/items")
+    public IncomeResponse addItem(@AuthenticationPrincipal User user, @PathVariable Long allocId,
+                                  @Valid @RequestBody AllocationItemRequest req) {
+        Allocation alloc = allocationRepo.findByIdAndUserId(allocId, user.getId()).orElseThrow();
+        validateItem(req);
+        AllocationItem it = new AllocationItem();
+        it.setUserId(user.getId());
+        it.setAllocationId(alloc.getId());
+        it.setName(req.name().trim());
+        it.setAmount(req.amount());
+        itemRepo.save(it);
+        return get(user, alloc.getMonth());
+    }
+
+    @PutMapping("/allocations/items/{id}")
+    public IncomeResponse updateItem(@AuthenticationPrincipal User user, @PathVariable Long id,
+                                     @Valid @RequestBody AllocationItemRequest req) {
+        validateItem(req);
+        AllocationItem it = itemRepo.findByIdAndUserId(id, user.getId()).orElseThrow();
+        it.setName(req.name().trim());
+        it.setAmount(req.amount());
+        itemRepo.save(it);
+        return get(user, monthOfItem(user, it));
+    }
+
+    @DeleteMapping("/allocations/items/{id}")
+    public IncomeResponse deleteItem(@AuthenticationPrincipal User user, @PathVariable Long id) {
+        Optional<AllocationItem> it = itemRepo.findByIdAndUserId(id, user.getId());
+        String m = it.map(i -> monthOfItem(user, i)).orElse(null);
+        it.ifPresent(itemRepo::delete);
+        return get(user, m);
+    }
+
+    private String monthOfItem(User user, AllocationItem it) {
+        return allocationRepo.findByIdAndUserId(it.getAllocationId(), user.getId())
+                .map(Allocation::getMonth).orElse(null);
+    }
+
+    private void validateItem(AllocationItemRequest req) {
+        if (req.amount() == null || req.amount().signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O valor do item não pode ser negativo.");
+        }
     }
 
     // ---------- internals ----------
@@ -202,13 +291,29 @@ public class IncomeController {
         a.setName(req.name());
         a.setPercentage(hasFixed ? null : req.percentage());
         a.setFixedAmount(hasFixed ? req.fixedAmount() : null);
+        a.setColor(normalizeColor(req.color()));
+    }
+
+    /** Aceita uma cor hex #RRGGBB (case-insensitive); vazio → null (usa a paleta por omissão). */
+    private String normalizeColor(String color) {
+        if (color == null || color.isBlank()) return null;
+        String c = color.trim();
+        if (!c.matches("#[0-9a-fA-F]{6}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cor inválida. Usa o formato #RRGGBB.");
+        }
+        return c.toLowerCase();
     }
 
     private IncomeResponse buildResponse(User user, String month, IncomeSettings settings, String copiedFrom) {
         BigDecimal income = settings != null ? settings.getMonthlyIncome() : BigDecimal.ZERO;
 
-        List<AllocationDto> allocations = allocationRepo
-                .findByUserIdAndMonthOrderByIdAsc(user.getId(), month).stream()
+        List<Allocation> allocEntities = allocationRepo.findByUserIdAndMonthOrderByIdAsc(user.getId(), month);
+        List<AllocationItem> allItems = allocEntities.isEmpty()
+                ? List.of()
+                : itemRepo.findByUserIdAndAllocationIdInOrderByIdAsc(
+                        user.getId(), allocEntities.stream().map(Allocation::getId).toList());
+
+        List<AllocationDto> allocations = allocEntities.stream()
                 .map(a -> {
                     BigDecimal amount = a.getFixedAmount() != null
                             ? a.getFixedAmount()
@@ -216,8 +321,17 @@ public class IncomeController {
                     BigDecimal effectivePct = income.signum() > 0
                             ? amount.multiply(HUNDRED).divide(income, 1, RoundingMode.HALF_UP)
                             : a.getPercentage();
+                    List<AllocationItemDto> items = allItems.stream()
+                            .filter(it -> it.getAllocationId().equals(a.getId()))
+                            .map(it -> new AllocationItemDto(it.getId(), it.getName(),
+                                    it.getAmount() != null ? it.getAmount() : BigDecimal.ZERO))
+                            .toList();
+                    BigDecimal itemsTotal = items.stream()
+                            .map(AllocationItemDto::amount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add)
+                            .setScale(2, RoundingMode.HALF_UP);
                     return new AllocationDto(a.getId(), a.getName(), a.getPercentage(), a.getFixedAmount(),
-                            amount, effectivePct);
+                            amount, effectivePct, items, itemsTotal, a.getColor());
                 })
                 .toList();
 

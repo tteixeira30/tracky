@@ -59,6 +59,17 @@ public class InvestmentController {
         return new PortfolioResponse(new Summary(scale(invested), scale(current), scale(gain), gainPct), dtos);
     }
 
+    /**
+     * Força cotações em tempo real: limpa a cache de preços dos ativos do utilizador
+     * e devolve o portefólio já com os valores acabados de obter.
+     */
+    @PostMapping("/refresh")
+    public PortfolioResponse refresh(@AuthenticationPrincipal User user) {
+        repo.findByUserIdOrderByIdAsc(user.getId())
+                .forEach(inv -> priceService.evictPrice(inv.getSymbol(), inv.getType()));
+        return list(user);
+    }
+
     @PostMapping
     public InvestmentDto create(@AuthenticationPrincipal User user, @Valid @RequestBody CreateRequest req) {
         Investment inv = new Investment();
