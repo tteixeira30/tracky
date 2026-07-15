@@ -23,9 +23,36 @@
   --radius-sm: 9px;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
   --sidebar-w: 236px;
+  --sidebar-bg: rgba(15, 18, 27, 0.75);
+  --nav-bg: rgba(15, 18, 27, 0.88);
+  --glow-1: rgba(99, 102, 241, 0.12);
+  --glow-2: rgba(34, 211, 238, 0.07);
+}
+
+/* Tema claro: sobrepõe os tokens; o resto do CSS usa var() e adapta-se sozinho. */
+:root[data-theme="light"] {
+  --bg: #f3f5fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f9;
+  --surface-3: #e5e9f2;
+  --border: #e4e8f1;
+  --border-strong: #d2d8e5;
+  --text: #1a1e2c;
+  --text-dim: #5a6478;
+  --text-faint: #8b93a7;
+  --accent-soft: rgba(99, 102, 241, 0.12);
+  --green-soft: rgba(16, 185, 129, 0.12);
+  --red-soft: rgba(239, 68, 68, 0.11);
+  --amber-soft: rgba(245, 158, 11, 0.14);
+  --shadow: 0 18px 50px rgba(30, 41, 74, 0.14);
+  --sidebar-bg: rgba(248, 250, 253, 0.82);
+  --nav-bg: rgba(255, 255, 255, 0.9);
+  --glow-1: rgba(99, 102, 241, 0.09);
+  --glow-2: rgba(34, 211, 238, 0.07);
 }
 
 html { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
 
 body {
   background: var(--bg);
@@ -43,8 +70,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(600px 320px at 12% -5%, rgba(99, 102, 241, 0.12), transparent 70%),
-    radial-gradient(520px 300px at 95% 0%, rgba(34, 211, 238, 0.07), transparent 70%);
+    radial-gradient(600px 320px at 12% -5%, var(--glow-1), transparent 70%),
+    radial-gradient(520px 300px at 95% 0%, var(--glow-2), transparent 70%);
   z-index: 0;
 }
 
@@ -68,7 +95,7 @@ body::before {
   flex-direction: column;
   padding: 22px 14px;
   border-right: 1px solid var(--border);
-  background: rgba(15, 18, 27, 0.75);
+  background: var(--sidebar-bg);
   backdrop-filter: blur(10px);
   z-index: 40;
 }
@@ -192,6 +219,8 @@ body::before {
   .currency-select .dropdown { width: auto; }
   .currency-select .dd-trigger { height: 36px; box-sizing: border-box; padding: 0 10px; gap: 6px; font-size: 12px; }
   .currency-select .dd-pop { left: auto; right: 0; min-width: 140px; }
+  .theme-select { margin: auto 0; height: 36px; }
+  .theme-select > span { display: none; }
   .user-chip { height: 36px; margin: auto 0; padding: 0; background: transparent; border: none; gap: 8px; }
   .user-info { display: none; }
   .user-chip .icon-btn { display: flex; align-items: center; justify-content: center; }
@@ -206,7 +235,7 @@ body::before {
     right: 0;
     bottom: 0;
     z-index: 50;
-    background: rgba(15, 18, 27, 0.88);
+    background: var(--nav-bg);
     backdrop-filter: blur(14px);
     border-top: 1px solid var(--border);
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
@@ -1271,3 +1300,17 @@ tr.alloc-open .row-title { font-weight: 600; }
   padding: 8px 12px;
   font-size: 12.5px;
 }
+
+/* ---------- Seletor de tema (claro/escuro) ---------- */
+.theme-select { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.theme-select > span { font-size: 10.5px; font-weight: 500; color: var(--text-faint); letter-spacing: 0.6px; text-transform: uppercase; }
+.theme-toggle {
+  display: inline-flex; padding: 3px; gap: 2px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 999px;
+}
+.theme-toggle .tt-opt {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 24px; border-radius: 999px; color: var(--text-faint);
+  transition: background 0.15s, color 0.15s;
+}
+.theme-toggle .tt-opt.active { background: var(--accent); color: #fff; }

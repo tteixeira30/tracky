@@ -3,6 +3,7 @@ import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveCont
 import { api, fmtEur, fmtPct, fmtMoneyShort } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import Dropdown from '../components/Dropdown'
+import { useChartColors } from '../components/ThemeContext'
 import { useToast } from '../components/Toast'
 import { IconCoins, IconPencil, IconPlus, IconRefresh, IconTrendingUp, IconWallet, IconSparkle } from '../components/Icons'
 
@@ -78,6 +79,7 @@ function ChartTooltip({ active, payload, label }) {
 
 export default function InvestmentsPage() {
   const toast = useToast()
+  const chart = useChartColors()
   const [portfolio, setPortfolio] = useState(null)
   const [history, setHistory] = useState(null)
   const [range, setRange] = useState('3mo')
@@ -132,7 +134,10 @@ export default function InvestmentsPage() {
   const refresh = async () => {
     setRefreshing(true)
     try {
-      await load()
+      // força novas cotações no servidor (ignora a cache) em vez de reutilizar preços recentes
+      setPortfolio(await api.refreshInvestments())
+      setHistory(null)
+      api.getPortfolioHistory(range).then(setHistory).catch(() => setHistory([]))
       toast.info('Cotações atualizadas', 'Preços obtidos em tempo real.')
     } catch { toast.error('Erro', 'Não foi possível atualizar as cotações.') }
     finally { setRefreshing(false) }
@@ -323,10 +328,10 @@ export default function InvestmentsPage() {
                   <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#232936" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" stroke="#5c6478" fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
+              <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" stroke={chart.axis} fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
                      tickFormatter={(d) => new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} />
-              <YAxis stroke="#5c6478" fontSize={11.5} axisLine={false} tickLine={false} width={72}
+              <YAxis stroke={chart.axis} fontSize={11.5} axisLine={false} tickLine={false} width={72}
                      tickFormatter={fmtMoneyShort} domain={['auto', 'auto']} />
               <Tooltip content={<ChartTooltip />} />
               <Area type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2.2} fill="url(#grad)"
@@ -417,13 +422,13 @@ export default function InvestmentsPage() {
             <>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="#232936" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" stroke="#5c6478" fontSize={11.5} tickMargin={10}
+                  <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" stroke={chart.axis} fontSize={11.5} tickMargin={10}
                          axisLine={false} tickLine={false} minTickGap={48} ticks={yearTicks}
                          tickFormatter={(m) => longHorizon
                            ? projectionDate(m).getFullYear()
                            : projectionDate(m).toLocaleDateString('pt-PT', { month: 'short', year: '2-digit' })} />
-                  <YAxis stroke="#5c6478" fontSize={11.5} axisLine={false} tickLine={false} width={78}
+                  <YAxis stroke={chart.axis} fontSize={11.5} axisLine={false} tickLine={false} width={78}
                          tickFormatter={fmtMoneyShort}
                          domain={['auto', 'auto']} />
                   <Tooltip content={<ProjectionTooltip />} />

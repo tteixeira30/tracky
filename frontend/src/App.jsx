@@ -8,8 +8,9 @@ import AchievementsPage from './pages/AchievementsPage'
 import AuthPage from './pages/AuthPage'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './components/AuthContext'
+import { ThemeProvider, useTheme } from './components/ThemeContext'
 import Dropdown from './components/Dropdown'
-import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconTrophy, IconLogout } from './components/Icons'
+import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconTrophy, IconLogout, IconSun, IconMoon } from './components/Icons'
 
 const TABS = [
   { id: 'dashboard', label: 'Painel', icon: IconGrid },
@@ -30,6 +31,19 @@ const CURRENCIES = [
   { code: 'AUD', symbol: 'A$', name: 'Dólar australiano' },
   { code: 'JPY', symbol: '¥', name: 'Iene' },
 ]
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme()
+  const dark = theme === 'dark'
+  return (
+    <button className="theme-toggle" onClick={toggle} role="switch" aria-checked={dark}
+            aria-label={dark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            title={dark ? 'Tema claro' : 'Tema escuro'}>
+      <span className={`tt-opt ${dark ? 'active' : ''}`}><IconMoon size={14} /></span>
+      <span className={`tt-opt ${!dark ? 'active' : ''}`}><IconSun size={14} /></span>
+    </button>
+  )
+}
 
 function Shell() {
   const { user, loading, logout, baseCurrency, changeCurrency } = useAuth()
@@ -75,6 +89,10 @@ function Shell() {
             <Dropdown value={baseCurrency} onChange={changeCurrency}
                       options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.code} · ${c.symbol}` }))} />
           </div>
+          <div className="theme-select">
+            <span>Aparência</span>
+            <ThemeToggle />
+          </div>
           <div className="user-chip">
             <span className="user-avatar">{initials}</span>
             <div className="user-info">
@@ -117,10 +135,12 @@ function Shell() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <Shell />
-      </AuthProvider>
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <Shell />
+        </AuthProvider>
+      </ToastProvider>
+    </ThemeProvider>
   )
 }

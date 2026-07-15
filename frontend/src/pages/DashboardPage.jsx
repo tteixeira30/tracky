@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api, fmtEur, fmtPct, fmtMoneyShort } from '../api'
 import { useAuth } from '../components/AuthContext'
+import { useChartColors } from '../components/ThemeContext'
 import {
   IconWallet, IconTrendingUp, IconTarget, IconCheck, IconInfo,
   IconSparkle, IconCoins, IconActivity,
@@ -51,6 +52,7 @@ function timeAgo(iso) {
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const chart = useChartColors()
   const [data, setData] = useState(null)
   const [error, setError] = useState(false)
 
@@ -112,7 +114,7 @@ export default function DashboardPage() {
     <div>
       <div className="page-head">
         <div>
-          <h2>Olá{firstName ? `, ${firstName}` : ''} 👋</h2>
+          <h2>Olá{firstName ? `, ${firstName}` : ''}</h2>
           <p>Aqui está o resumo das tuas finanças.</p>
         </div>
       </div>
@@ -153,10 +155,10 @@ export default function DashboardPage() {
                     <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#232936" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" stroke="#5c6478" fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
+                <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" stroke={chart.axis} fontSize={11.5} tickMargin={10} axisLine={false} tickLine={false}
                        tickFormatter={(d) => new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })} />
-                <YAxis stroke="#5c6478" fontSize={11.5} axisLine={false} tickLine={false} width={72}
+                <YAxis stroke={chart.axis} fontSize={11.5} axisLine={false} tickLine={false} width={72}
                        tickFormatter={fmtMoneyShort} domain={['auto', 'auto']} />
                 <Tooltip content={<ChartTooltip />} />
                 <Area type="monotone" dataKey="value" stroke="#22d3ee" strokeWidth={2.2} fill="url(#dash-grad)"

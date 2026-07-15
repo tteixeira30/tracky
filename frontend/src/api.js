@@ -66,6 +66,7 @@ export const api = {
 
   // Investimentos
   getInvestments: () => request('/investments'),
+  refreshInvestments: () => request('/investments/refresh', { method: 'POST' }),
   addInvestment: (data) => request('/investments', { method: 'POST', body: JSON.stringify(data) }),
   updateInvestment: (id, data) => request(`/investments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteInvestment: (id) => request(`/investments/${id}`, { method: 'DELETE' }),
