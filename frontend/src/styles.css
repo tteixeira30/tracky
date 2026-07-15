@@ -1070,7 +1070,7 @@ tr.alloc-open .row-title { font-weight: 600; }
 .datepicker { position: relative; }
 .dp-trigger {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  width: 100%; padding: 11px 13px; border-radius: var(--radius-sm);
+  width: 100%; padding: 10px 12px; border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong); background-color: var(--surface-2);
   color: var(--text); font-family: inherit; font-size: 14px; cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -1084,19 +1084,21 @@ tr.alloc-open .row-title { font-weight: 600; }
 .datepicker.open .dp-trigger svg { color: var(--accent); }
 
 .dp-pop {
-  margin-top: 8px; padding: 12px;
+  position: absolute; top: 100%; left: 0; z-index: 60;
+  margin-top: 6px; padding: 9px;
+  width: 260px; max-width: calc(100vw - 32px);
   background: var(--surface); border: 1px solid var(--border-strong);
   border-radius: var(--radius); box-shadow: var(--shadow);
 }
-.dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.dp-month { font-size: 13.5px; font-weight: 600; }
-.dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.dp-wd { text-align: center; font-size: 10.5px; font-weight: 600; color: var(--text-faint);
-  text-transform: uppercase; padding-bottom: 5px; }
+.dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.dp-month { font-size: 12.5px; font-weight: 600; }
+.dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+.dp-wd { text-align: center; font-size: 10px; font-weight: 600; color: var(--text-faint);
+  text-transform: uppercase; padding-bottom: 3px; }
 .dp-day {
   aspect-ratio: 1; display: grid; place-items: center;
   border: none; background: transparent; color: var(--text);
-  font-family: inherit; font-size: 12.5px; border-radius: 8px; cursor: pointer;
+  font-family: inherit; font-size: 12px; border-radius: 6px; cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 .dp-day:hover { background: var(--surface-3); }
@@ -1104,11 +1106,11 @@ tr.alloc-open .row-title { font-weight: 600; }
 .dp-day.selected { background: var(--accent); color: #fff; font-weight: 700; }
 .dp-day.selected.today { color: #fff; }
 .dp-day.empty { visibility: hidden; cursor: default; }
-.dp-foot { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 10px;
+.dp-foot { display: flex; justify-content: space-between; margin-top: 5px; padding-top: 7px;
   border-top: 1px solid var(--border); }
 .dp-foot button {
   background: none; border: none; color: var(--accent);
-  font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 2px 4px;
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; padding: 2px 4px;
 }
 .dp-foot button:hover { text-decoration: underline; }
 
