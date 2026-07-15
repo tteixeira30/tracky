@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { api, fmtEur, fmtPct, fmtMoneyShort } from '../api'
+import { api, fmtEur, fmtPct, fmtMoneyShort, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import Dropdown from '../components/Dropdown'
 import { useChartColors } from '../components/ThemeContext'
@@ -80,6 +80,7 @@ function ChartTooltip({ active, payload, label }) {
 export default function InvestmentsPage() {
   const toast = useToast()
   const chart = useChartColors()
+  const cur = getCurrencySymbol()
   const [portfolio, setPortfolio] = useState(null)
   const [history, setHistory] = useState(null)
   const [range, setRange] = useState('3mo')
@@ -378,7 +379,7 @@ export default function InvestmentsPage() {
               <input type="number" min="0" step="10" placeholder="0" value={projMonthly}
                      onChange={(e) => setProjMonthly(e.target.value)}
                      onKeyDown={(e) => e.key === 'Enter' && applyProjection()} aria-label="Reforço mensal" />
-              <span className="affix">€/mês</span>
+              <span className="affix">{cur}/mês</span>
             </div>
           </div>
           <div className="proj-field">
@@ -478,7 +479,7 @@ export default function InvestmentsPage() {
         <div className="card-header">
           <div>
             <h3>Os meus ativos</h3>
-            <div className="sub">Cotações atualizadas ao minuto e convertidas para EUR</div>
+            <div className="sub">Cotações atualizadas ao minuto e convertidas para a moeda base</div>
           </div>
         </div>
         {investments.length === 0 ? (
@@ -572,7 +573,7 @@ export default function InvestmentsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="0.01" placeholder="Ex: 1500" value={form.currentValue}
                      onChange={(e) => setForm({ ...form, currentValue: e.target.value })} />
-              <span className="affix">€</span>
+              <span className="affix">{cur}</span>
             </div>
           </div>
           <div className="field">
@@ -593,7 +594,7 @@ export default function InvestmentsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="10" placeholder="Ex: 100" value={form.monthlyContribution}
                      onChange={(e) => setForm({ ...form, monthlyContribution: e.target.value })} />
-              <span className="affix">€/mês</span>
+              <span className="affix">{cur}/mês</span>
             </div>
             <span className="hint">
               Adicionado ao investimento no dia 1 de cada mês (ou com o botão "Simular reforço mensal").
@@ -644,7 +645,7 @@ export default function InvestmentsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="0.01" value={editForm.currentValue}
                      onChange={(e) => setEditForm({ ...editForm, currentValue: e.target.value })} />
-              <span className="affix">€</span>
+              <span className="affix">{cur}</span>
             </div>
           </div>
           <div className="field">
@@ -665,7 +666,7 @@ export default function InvestmentsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="10" placeholder="Sem reforço" value={editForm.monthlyContribution}
                      onChange={(e) => setEditForm({ ...editForm, monthlyContribution: e.target.value })} />
-              <span className="affix">€/mês</span>
+              <span className="affix">{cur}/mês</span>
             </div>
             <span className="hint">Deixa vazio ou 0 para desativar o reforço mensal.</span>
           </div>

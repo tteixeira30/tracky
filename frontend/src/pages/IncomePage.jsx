@@ -1,13 +1,16 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { api, fmtEur } from '../api'
+import { api, fmtEur, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import { useToast } from '../components/Toast'
 import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconPie, IconWallet, IconTrash } from '../components/Icons'
 
 const COLORS = ['#6366f1', '#22d3ee', '#10b981', '#f59e0b', '#ef4444', '#a78bfa', '#fb923c', '#e879f9']
 
-const EMPTY_ALLOC = { name: '', mode: 'percentage', value: '' }
+const EMPTY_ALLOC = { name: '', mode: 'percentage', value: '', color: COLORS[0] }
+
+// cor de uma categoria: a escolhida pelo utilizador, ou a cor da paleta pela ordem
+const allocColor = (a, i) => a.color || COLORS[i % COLORS.length]
 const EMPTY_ITEM = { name: '', value: '' }
 
 const fmtMonth = (m) => {
@@ -28,6 +31,7 @@ function ChartTooltip({ active, payload }) {
 
 export default function IncomePage() {
   const toast = useToast()
+  const cur = getCurrencySymbol()
   const [data, setData] = useState(null)
   const [incomeModal, setIncomeModal] = useState(false)
   const [incomeInput, setIncomeInput] = useState('')
@@ -65,6 +69,13 @@ export default function IncomePage() {
     finally { setBusy(false) }
   }
 
+  const openAddAlloc = () => {
+    // por omissão sugere a próxima cor da paleta ainda "livre" pela ordem das categorias
+    const nextColor = COLORS[(data?.allocations?.length ?? 0) % COLORS.length]
+    setAllocForm({ ...EMPTY_ALLOC, color: nextColor })
+    setAllocModal(true)
+  }
+
   const addAlloc = async () => {
     const value = Number(allocForm.value)
     if (!allocForm.name.trim() || !value || value <= 0) {
@@ -75,15 +86,25 @@ export default function IncomePage() {
     }
     setBusy(true)
     try {
-      const payload = allocForm.mode === 'percentage'
+      const base = allocForm.mode === 'percentage'
         ? { name: allocForm.name.trim(), percentage: value }
         : { name: allocForm.name.trim(), fixedAmount: value }
-      setData(await api.addAllocation(payload, data.month))
+      setData(await api.addAllocation({ ...base, color: allocForm.color }, data.month))
       setAllocModal(false)
       setAllocForm(EMPTY_ALLOC)
       toast.success('Categoria adicionada', `"${allocForm.name.trim()}" incluída em ${fmtMonth(data.month)}.`)
     } catch (e) { toast.error('Erro ao adicionar', e.message) }
     finally { setBusy(false) }
+  }
+
+  // muda apenas a cor de uma categoria existente (mantém nome e regra)
+  const recolor = async (alloc, color) => {
+    try {
+      const rule = alloc.fixedAmount != null
+        ? { fixedAmount: Number(alloc.fixedAmount) }
+        : { percentage: Number(alloc.percentage) }
+      setData(await api.updateAllocation(alloc.id, { name: alloc.name, ...rule, color }))
+    } catch (e) { toast.error('Erro ao mudar a cor', e.message) }
   }
 
   const removeAlloc = async () => {
@@ -154,8 +175,8 @@ export default function IncomePage() {
   const income = Number(data.monthlyIncome)
   const totalPct = Number(data.totalPercentage)
   const overAllocated = income > 0 && Number(data.unallocated) < 0
-  const pieData = data.allocations.map((a) => ({ name: a.name, value: Number(a.amount) }))
-  if (Number(data.unallocated) > 0.005) pieData.push({ name: 'Não alocado', value: Number(data.unallocated) })
+  const pieData = data.allocations.map((a, i) => ({ name: a.name, value: Number(a.amount), color: allocColor(a, i) }))
+  if (Number(data.unallocated) > 0.005) pieData.push({ name: 'Não alocado', value: Number(data.unallocated), color: COLORS[pieData.length % COLORS.length] })
 
   // navegação entre meses com dados
   const months = data.availableMonths ?? []
@@ -223,7 +244,7 @@ export default function IncomePage() {
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <span className={`badge ${overAllocated ? 'warn' : 'accent'}`}>{totalPct.toFixed(0)}% alocado</span>
-              <button className="btn small" onClick={() => setAllocModal(true)}>
+              <button className="btn small" onClick={openAddAlloc}>
                 <IconPlus size={14} /> Categoria
               </button>
             </div>
@@ -234,7 +255,7 @@ export default function IncomePage() {
               <div className="empty-icon"><IconPie size={24} /></div>
               <h4>Sem categorias</h4>
               <p>Cria a primeira categoria para distribuir o rendimento deste mês — por percentagem (ex: 30% poupança) ou por valor fixo (ex: 400€ renda).</p>
-              <button className="btn" onClick={() => setAllocModal(true)}><IconPlus size={15} /> Criar categoria</button>
+              <button className="btn" onClick={openAddAlloc}><IconPlus size={15} /> Criar categoria</button>
             </div>
           ) : (
             <div className="table-wrap">
@@ -244,7 +265,7 @@ export default function IncomePage() {
                 </thead>
                 <tbody>
                   {data.allocations.map((a, i) => {
-                    const color = COLORS[i % COLORS.length]
+                    const color = allocColor(a, i)
                     const items = a.items ?? []
                     const spent = Number(a.itemsTotal ?? 0)
                     const budget = Number(a.amount)
@@ -263,7 +284,11 @@ export default function IncomePage() {
                               <IconChevronRight size={15}
                                 style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
                             </button>
-                            <span className="alloc-color" style={{ background: color }} />
+                            <label className="alloc-color pick" style={{ background: color }}
+                                   title="Mudar a cor da categoria">
+                              <input type="color" value={color}
+                                     onChange={(e) => recolor(a, e.target.value)} />
+                            </label>
                             <span className="row-title">{a.name}</span>
                             {items.length > 0 && <span className="item-count">{items.length}</span>}
                           </td>
@@ -363,7 +388,7 @@ export default function IncomePage() {
               <PieChart>
                 <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={100}
                      paddingAngle={3} strokeWidth={0}>
-                  {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Pie>
                 <Tooltip content={<ChartTooltip />} />
               </PieChart>
@@ -387,7 +412,7 @@ export default function IncomePage() {
             <input type="number" min="0" step="0.01" autoFocus value={incomeInput}
                    onChange={(e) => setIncomeInput(e.target.value)}
                    onKeyDown={(e) => e.key === 'Enter' && saveIncome()} />
-            <span className="affix">€</span>
+            <span className="affix">{cur}</span>
           </div>
         </div>
       </Modal>
@@ -431,9 +456,26 @@ export default function IncomePage() {
                      placeholder={isPct ? 'Ex: 30' : 'Ex: 400'} value={allocForm.value}
                      onChange={(e) => setAllocForm({ ...allocForm, value: e.target.value })}
                      onKeyDown={(e) => e.key === 'Enter' && addAlloc()} />
-              <span className="affix">{isPct ? '%' : '€'}</span>
+              <span className="affix">{isPct ? '%' : cur}</span>
             </div>
             {formHint && <span className="hint">{formHint}</span>}
+          </div>
+          <div className="field full">
+            <label>Cor</label>
+            <div className="color-picker">
+              {COLORS.map((c) => (
+                <button type="button" key={c}
+                        className={`color-swatch ${allocForm.color?.toLowerCase() === c ? 'selected' : ''}`}
+                        style={{ background: c }} title={c}
+                        onClick={() => setAllocForm({ ...allocForm, color: c })} />
+              ))}
+              <label className="color-custom" style={{ background: allocForm.color }}
+                     title="Cor personalizada (RGB)">
+                <input type="color" value={allocForm.color || COLORS[0]}
+                       onChange={(e) => setAllocForm({ ...allocForm, color: e.target.value })} />
+                <IconPlus size={13} />
+              </label>
+            </div>
           </div>
         </div>
       </Modal>
@@ -462,7 +504,7 @@ export default function IncomePage() {
               <input type="number" min="0" step="0.01" placeholder="Ex: 12" value={itemForm.value}
                      onChange={(e) => setItemForm({ ...itemForm, value: e.target.value })}
                      onKeyDown={(e) => e.key === 'Enter' && saveItem()} />
-              <span className="affix">€</span>
+              <span className="affix">{cur}</span>
             </div>
           </div>
         </div>

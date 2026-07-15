@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, fmtEur } from '../api'
+import { api, fmtEur, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import { useToast } from '../components/Toast'
 import { IconCalendar, IconCheck, IconPlus, IconRefresh, IconTarget } from '../components/Icons'
@@ -8,6 +8,7 @@ const EMPTY_FORM = { name: '', targetAmount: '', monthlyAllocation: '', savedAmo
 
 export default function GoalsPage() {
   const toast = useToast()
+  const cur = getCurrencySymbol()
   const [goals, setGoals] = useState(null)
   const [addModal, setAddModal] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -180,7 +181,7 @@ export default function GoalsPage() {
                              value={contrib[g.id] ?? ''}
                              onChange={(e) => setContrib({ ...contrib, [g.id]: e.target.value })}
                              onKeyDown={(e) => e.key === 'Enter' && contribute(g)} />
-                      <span className="affix">€</span>
+                      <span className="affix">{cur}</span>
                     </div>
                     <button className="btn small ghost" onClick={() => contribute(g)}>
                       <IconPlus size={13} /> Contribuir
@@ -212,7 +213,7 @@ export default function GoalsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="0.01" placeholder="Ex: 10000" value={form.targetAmount}
                      onChange={(e) => setForm({ ...form, targetAmount: e.target.value })} />
-              <span className="affix">€</span>
+              <span className="affix">{cur}</span>
             </div>
           </div>
           <div className="field">
@@ -220,7 +221,7 @@ export default function GoalsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="0.01" placeholder="Ex: 300" value={form.monthlyAllocation}
                      onChange={(e) => setForm({ ...form, monthlyAllocation: e.target.value })} />
-              <span className="affix">€</span>
+              <span className="affix">{cur}</span>
             </div>
           </div>
           <div className="field full">
@@ -228,7 +229,7 @@ export default function GoalsPage() {
             <div className="input-affix">
               <input type="number" min="0" step="0.01" placeholder="0" value={form.savedAmount}
                      onChange={(e) => setForm({ ...form, savedAmount: e.target.value })} />
-              <span className="affix">€</span>
+              <span className="affix">{cur}</span>
             </div>
             {estimateMonths() && <span className="hint">{estimateMonths()}</span>}
           </div>

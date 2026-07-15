@@ -55,14 +55,15 @@ public class IncomeController {
     public record AllocationItemDto(Long id, String name, BigDecimal amount) {}
     public record AllocationDto(Long id, String name, BigDecimal percentage, BigDecimal fixedAmount,
                                 BigDecimal amount, BigDecimal effectivePercentage,
-                                List<AllocationItemDto> items, BigDecimal itemsTotal) {}
+                                List<AllocationItemDto> items, BigDecimal itemsTotal, String color) {}
     public record IncomeResponse(String month, boolean current, BigDecimal monthlyIncome,
                                  List<AllocationDto> allocations, BigDecimal totalAllocated,
                                  BigDecimal totalPercentage, BigDecimal unallocated,
                                  List<String> availableMonths, String copiedFrom) {}
     public record IncomeRequest(@NotNull BigDecimal monthlyIncome) {}
-    /** Ou percentage ou fixedAmount — exatamente um dos dois. */
-    public record AllocationRequest(@NotBlank String name, BigDecimal percentage, BigDecimal fixedAmount) {}
+    /** Ou percentage ou fixedAmount — exatamente um dos dois. color é opcional (hex). */
+    public record AllocationRequest(@NotBlank String name, BigDecimal percentage, BigDecimal fixedAmount,
+                                    String color) {}
     public record AllocationItemRequest(@NotBlank String name, @NotNull BigDecimal amount) {}
 
     // ---------- helpers ----------
@@ -138,6 +139,7 @@ public class IncomeController {
                     copy.setName(a.getName());
                     copy.setPercentage(a.getPercentage());
                     copy.setFixedAmount(a.getFixedAmount());
+                    copy.setColor(a.getColor());
                     allocationRepo.save(copy);
                     // os itens (ex: subscrições) recorrem — copia-os para o novo mês
                     for (AllocationItem it : itemRepo.findByAllocationIdOrderByIdAsc(a.getId())) {
@@ -274,6 +276,17 @@ public class IncomeController {
         a.setName(req.name());
         a.setPercentage(hasFixed ? null : req.percentage());
         a.setFixedAmount(hasFixed ? req.fixedAmount() : null);
+        a.setColor(normalizeColor(req.color()));
+    }
+
+    /** Aceita uma cor hex #RRGGBB (case-insensitive); vazio → null (usa a paleta por omissão). */
+    private String normalizeColor(String color) {
+        if (color == null || color.isBlank()) return null;
+        String c = color.trim();
+        if (!c.matches("#[0-9a-fA-F]{6}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cor inválida. Usa o formato #RRGGBB.");
+        }
+        return c.toLowerCase();
     }
 
     private IncomeResponse buildResponse(User user, String month, IncomeSettings settings, String copiedFrom) {
@@ -303,7 +316,7 @@ public class IncomeController {
                             .reduce(BigDecimal.ZERO, BigDecimal::add)
                             .setScale(2, RoundingMode.HALF_UP);
                     return new AllocationDto(a.getId(), a.getName(), a.getPercentage(), a.getFixedAmount(),
-                            amount, effectivePct, items, itemsTotal);
+                            amount, effectivePct, items, itemsTotal, a.getColor());
                 })
                 .toList();
 

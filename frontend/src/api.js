@@ -101,6 +101,14 @@ export const setDisplayCurrency = (currency, rateFromEur) => {
 }
 export const getDisplayCurrency = () => displayCurrency
 
+// Símbolos das moedas suportadas — usados nos afixos dos campos de input.
+export const CURRENCY_SYMBOLS = {
+  EUR: '€', USD: '$', GBP: '£', BRL: 'R$', CHF: 'Fr', CAD: 'C$', AUD: 'A$', JPY: '¥',
+}
+
+/** Símbolo da moeda base ativa (ex: '€', '$'), para rótulos de campos monetários. */
+export const getCurrencySymbol = () => CURRENCY_SYMBOLS[displayCurrency] || displayCurrency
+
 /** Converte um valor introduzido na moeda base para EUR (para enviar ao backend). */
 export const toEur = (baseValue) => {
   const n = Number(baseValue)
