@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api, fmtEur, fmtPct, fmtMoneyShort } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
+import Dropdown from '../components/Dropdown'
 import { useToast } from '../components/Toast'
 import { IconCoins, IconPencil, IconPlus, IconRefresh, IconTrendingUp, IconWallet, IconSparkle } from '../components/Icons'
 
@@ -544,9 +545,8 @@ export default function InvestmentsPage() {
           </div>
           <div className="field">
             <label>Tipo</label>
-            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              {TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
+            <Dropdown value={form.type} onChange={(type) => setForm({ ...form, type })}
+                      options={TYPES.map((t) => ({ value: t.id, label: t.label }))} />
           </div>
           <div className="field">
             <label>Símbolo {form.type === 'OTHER' && <span className="dim">(não aplicável)</span>}</label>
@@ -617,9 +617,8 @@ export default function InvestmentsPage() {
           </div>
           <div className="field">
             <label>Tipo</label>
-            <select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}>
-              {TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
+            <Dropdown value={editForm.type} onChange={(type) => setEditForm({ ...editForm, type })}
+                      options={TYPES.map((t) => ({ value: t.id, label: t.label }))} />
           </div>
           <div className="field">
             <label>Símbolo {editForm.type === 'OTHER' && <span className="dim">(não aplicável)</span>}</label>

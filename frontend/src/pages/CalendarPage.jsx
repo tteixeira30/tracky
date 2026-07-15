@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, fmtEur, toEur } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import DatePicker from '../components/DatePicker'
+import Dropdown from '../components/Dropdown'
 import { useToast } from '../components/Toast'
 import {
   IconWallet, IconHome, IconRepeat, IconBell, IconCoins, IconInfo, IconTrendingUp, IconTarget,
@@ -319,12 +320,9 @@ export default function CalendarPage() {
           </div>
           <div className="field">
             <label>Categoria</label>
-            <select value={form.category} onChange={(e) => {
-              const category = e.target.value
+            <Dropdown value={form.category} onChange={(category) => {
               setForm({ ...form, category, inflow: category === 'INCOME' ? true : form.inflow })
-            }}>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_META[c].label}</option>)}
-            </select>
+            }} options={CATEGORIES.map((c) => ({ value: c, label: CATEGORY_META[c].label }))} />
           </div>
           <div className="field">
             <label>Tipo</label>
@@ -343,11 +341,12 @@ export default function CalendarPage() {
           </div>
           <div className="field">
             <label>Frequência</label>
-            <select value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}>
-              <option value="MONTHLY">Mensal</option>
-              <option value="YEARLY">Anual</option>
-              <option value="ONCE">Única</option>
-            </select>
+            <Dropdown value={form.frequency} onChange={(frequency) => setForm({ ...form, frequency })}
+                      options={[
+                        { value: 'MONTHLY', label: 'Mensal' },
+                        { value: 'YEARLY', label: 'Anual' },
+                        { value: 'ONCE', label: 'Única' },
+                      ]} />
           </div>
           {form.frequency === 'MONTHLY' ? (
             <div className="field full">

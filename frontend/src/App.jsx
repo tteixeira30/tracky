@@ -8,6 +8,7 @@ import AchievementsPage from './pages/AchievementsPage'
 import AuthPage from './pages/AuthPage'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './components/AuthContext'
+import Dropdown from './components/Dropdown'
 import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconTrophy, IconLogout } from './components/Icons'
 
 const TABS = [
@@ -69,12 +70,11 @@ function Shell() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <label className="currency-select">
+          <div className="currency-select">
             <span>Moeda base</span>
-            <select value={baseCurrency} onChange={(e) => changeCurrency(e.target.value)}>
-              {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} · {c.symbol}</option>)}
-            </select>
-          </label>
+            <Dropdown value={baseCurrency} onChange={changeCurrency}
+                      options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.code} · ${c.symbol}` }))} />
+          </div>
           <div className="user-chip">
             <span className="user-avatar">{initials}</span>
             <div className="user-info">
