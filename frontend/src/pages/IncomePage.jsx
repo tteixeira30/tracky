@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { api, fmtEur } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import { useToast } from '../components/Toast'
-import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconPie, IconWallet } from '../components/Icons'
+import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconPie, IconWallet, IconTrash } from '../components/Icons'
 
 const COLORS = ['#6366f1', '#22d3ee', '#10b981', '#f59e0b', '#ef4444', '#a78bfa', '#fb923c', '#e879f9']
 
 const EMPTY_ALLOC = { name: '', mode: 'percentage', value: '' }
+const EMPTY_ITEM = { name: '', value: '' }
 
 const fmtMonth = (m) => {
   if (!m) return ''
@@ -33,6 +34,10 @@ export default function IncomePage() {
   const [allocModal, setAllocModal] = useState(false)
   const [allocForm, setAllocForm] = useState(EMPTY_ALLOC)
   const [toDelete, setToDelete] = useState(null)
+  const [expanded, setExpanded] = useState(() => new Set())
+  const [itemModal, setItemModal] = useState(null)   // { alloc, item } — item null = adicionar
+  const [itemForm, setItemForm] = useState(EMPTY_ITEM)
+  const [itemToDelete, setItemToDelete] = useState(null)  // { item, allocName }
   const [busy, setBusy] = useState(false)
   const copiedNotified = useRef(false)
 
@@ -87,6 +92,49 @@ export default function IncomePage() {
       setData(await api.deleteAllocation(toDelete.id))
       toast.info('Categoria removida', `"${toDelete.name}" removida de ${fmtMonth(data.month)}.`)
       setToDelete(null)
+    } catch (e) { toast.error('Erro ao remover', e.message) }
+    finally { setBusy(false) }
+  }
+
+  const toggleExpand = (id) => setExpanded((prev) => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  const openAddItem = (alloc) => { setItemForm(EMPTY_ITEM); setItemModal({ alloc, item: null }) }
+  const openEditItem = (alloc, item) => {
+    setItemForm({ name: item.name, value: String(item.amount) })
+    setItemModal({ alloc, item })
+  }
+
+  const saveItem = async () => {
+    const value = Number(itemForm.value)
+    if (!itemForm.name.trim() || itemForm.value === '' || Number.isNaN(value) || value < 0) {
+      toast.error('Campos em falta', 'Indica o nome e um valor (0 ou maior) para o item.')
+      return
+    }
+    setBusy(true)
+    try {
+      const payload = { name: itemForm.name.trim(), amount: value }
+      const { alloc, item } = itemModal
+      setData(item
+        ? await api.updateAllocationItem(item.id, payload)
+        : await api.addAllocationItem(alloc.id, payload))
+      setExpanded((prev) => new Set(prev).add(alloc.id))
+      setItemModal(null)
+      setItemForm(EMPTY_ITEM)
+      toast.success(item ? 'Item atualizado' : 'Item adicionado', `"${payload.name}" em "${alloc.name}".`)
+    } catch (e) { toast.error('Erro ao guardar', e.message) }
+    finally { setBusy(false) }
+  }
+
+  const removeItem = async () => {
+    setBusy(true)
+    try {
+      setData(await api.deleteAllocationItem(itemToDelete.item.id))
+      toast.info('Item removido', `"${itemToDelete.item.name}" removido de "${itemToDelete.allocName}".`)
+      setItemToDelete(null)
     } catch (e) { toast.error('Erro ao remover', e.message) }
     finally { setBusy(false) }
   }
@@ -195,26 +243,90 @@ export default function IncomePage() {
                   <tr><th>Categoria</th><th>Regra</th><th>%</th><th>Valor</th><th></th></tr>
                 </thead>
                 <tbody>
-                  {data.allocations.map((a, i) => (
-                    <tr key={a.id}>
-                      <td>
-                        <span className="alloc-color" style={{ background: COLORS[i % COLORS.length] }} />
-                        <span className="row-title">{a.name}</span>
-                      </td>
-                      <td data-label="Regra">
-                        <span className="type-chip">
-                          {a.fixedAmount != null ? 'Valor fixo' : `${Number(a.percentage).toFixed(0)}%`}
-                        </span>
-                      </td>
-                      <td data-label="% do rendimento" className={a.fixedAmount != null ? 'dim' : ''}>
-                        {a.effectivePercentage != null ? `${Number(a.effectivePercentage).toFixed(1)}%` : '—'}
-                      </td>
-                      <td data-label="Valor">{fmtEur(a.amount)}</td>
-                      <td className="actions-cell" style={{ textAlign: 'right' }}>
-                        <button className="icon-btn danger" onClick={() => setToDelete(a)} aria-label="Remover">✕</button>
-                      </td>
-                    </tr>
-                  ))}
+                  {data.allocations.map((a, i) => {
+                    const color = COLORS[i % COLORS.length]
+                    const items = a.items ?? []
+                    const spent = Number(a.itemsTotal ?? 0)
+                    const budget = Number(a.amount)
+                    const isOpen = expanded.has(a.id)
+                    const remaining = budget - spent
+                    const spentPct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0
+                    const overspent = spent > budget + 0.005
+                    return (
+                      <Fragment key={a.id}>
+                        <tr className={isOpen ? 'alloc-open' : ''}>
+                          <td>
+                            <button className="alloc-toggle" onClick={() => toggleExpand(a.id)}
+                                    aria-expanded={isOpen}
+                                    aria-label={isOpen ? 'Fechar detalhe' : 'Ver detalhe'}
+                                    title={isOpen ? 'Fechar detalhe' : 'Escrutinar categoria'}>
+                              <IconChevronRight size={15}
+                                style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
+                            </button>
+                            <span className="alloc-color" style={{ background: color }} />
+                            <span className="row-title">{a.name}</span>
+                            {items.length > 0 && <span className="item-count">{items.length}</span>}
+                          </td>
+                          <td data-label="Regra">
+                            <span className="type-chip">
+                              {a.fixedAmount != null ? 'Valor fixo' : `${Number(a.percentage).toFixed(0)}%`}
+                            </span>
+                          </td>
+                          <td data-label="% do rendimento" className={a.fixedAmount != null ? 'dim' : ''}>
+                            {a.effectivePercentage != null ? `${Number(a.effectivePercentage).toFixed(1)}%` : '—'}
+                          </td>
+                          <td data-label="Valor">{fmtEur(a.amount)}</td>
+                          <td className="actions-cell" style={{ textAlign: 'right' }}>
+                            <button className="icon-btn danger" onClick={() => setToDelete(a)} aria-label="Remover">✕</button>
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr className="alloc-detail-row">
+                            <td colSpan={5}>
+                              <div className="alloc-detail">
+                                <div className="alloc-detail-head">
+                                  <div className="detail-summary">
+                                    <span>Gasto <strong>{fmtEur(spent)}</strong> de {fmtEur(budget)}</span>
+                                    <span className={overspent ? 'neg' : 'dim'}>
+                                      {overspent
+                                        ? `${fmtEur(spent - budget)} acima do orçamento`
+                                        : `${fmtEur(remaining)} por escrutinar`}
+                                    </span>
+                                  </div>
+                                  <button className="btn small ghost" onClick={() => openAddItem(a)}>
+                                    <IconPlus size={13} /> Item
+                                  </button>
+                                </div>
+                                <div className="detail-bar">
+                                  <div className="detail-bar-fill"
+                                       style={{ width: `${spentPct}%`, background: overspent ? 'var(--red)' : color }} />
+                                </div>
+                                {items.length === 0 ? (
+                                  <p className="hint detail-empty">
+                                    Ainda sem itens. Adiciona o que gastas nesta categoria — ex: Netflix, Claude, HBO.
+                                  </p>
+                                ) : (
+                                  <ul className="item-list">
+                                    {items.map((it) => (
+                                      <li key={it.id}>
+                                        <span className="item-name">{it.name}</span>
+                                        <span className="item-amount">{fmtEur(it.amount)}</span>
+                                        <button className="icon-btn" onClick={() => openEditItem(a, it)}
+                                                aria-label="Editar item"><IconPencil size={13} /></button>
+                                        <button className="icon-btn danger"
+                                                onClick={() => setItemToDelete({ item: it, allocName: a.name })}
+                                                aria-label="Remover item"><IconTrash size={13} /></button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                   <tr>
                     <td className="dim">Não alocado</td>
                     <td></td>
@@ -325,6 +437,42 @@ export default function IncomePage() {
           </div>
         </div>
       </Modal>
+
+      <Modal open={!!itemModal} onClose={() => setItemModal(null)}
+             title={itemModal?.item ? 'Editar item' : 'Novo item'}
+             subtitle={itemModal ? `Dentro de "${itemModal.alloc.name}".` : ''} width={420}
+             footer={
+               <>
+                 <button className="btn ghost" onClick={() => setItemModal(null)}>Cancelar</button>
+                 <button className="btn" onClick={saveItem} disabled={busy}>
+                   {busy ? 'A guardar…' : itemModal?.item ? 'Guardar' : 'Adicionar'}
+                 </button>
+               </>
+             }>
+        <div className="form-grid">
+          <div className="field full">
+            <label>Nome</label>
+            <input placeholder="Ex: Netflix, Claude, HBO…" autoFocus value={itemForm.name}
+                   onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+                   onKeyDown={(e) => e.key === 'Enter' && saveItem()} />
+          </div>
+          <div className="field full">
+            <label>Valor mensal</label>
+            <div className="input-affix">
+              <input type="number" min="0" step="0.01" placeholder="Ex: 12" value={itemForm.value}
+                     onChange={(e) => setItemForm({ ...itemForm, value: e.target.value })}
+                     onKeyDown={(e) => e.key === 'Enter' && saveItem()} />
+              <span className="affix">€</span>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog open={!!itemToDelete} busy={busy}
+                     title="Remover item?"
+                     message={`O item "${itemToDelete?.item?.name}" vai ser removido de "${itemToDelete?.allocName}".`}
+                     confirmLabel="Remover"
+                     onConfirm={removeItem} onCancel={() => setItemToDelete(null)} />
 
       <ConfirmDialog open={!!toDelete} busy={busy}
                      title="Remover categoria?"

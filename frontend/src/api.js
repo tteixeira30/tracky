@@ -60,6 +60,9 @@ export const api = {
   addAllocation: (data, month) => request(`/income/allocations${month ? `?month=${month}` : ''}`, { method: 'POST', body: JSON.stringify(data) }),
   updateAllocation: (id, data) => request(`/income/allocations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteAllocation: (id) => request(`/income/allocations/${id}`, { method: 'DELETE' }),
+  addAllocationItem: (allocId, data) => request(`/income/allocations/${allocId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+  updateAllocationItem: (id, data) => request(`/income/allocations/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAllocationItem: (id) => request(`/income/allocations/items/${id}`, { method: 'DELETE' }),
 
   // Investimentos
   getInvestments: () => request('/investments'),

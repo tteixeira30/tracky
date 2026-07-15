@@ -657,6 +657,62 @@ td .row-sub { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
 
 .alloc-color { width: 11px; height: 11px; border-radius: 4px; display: inline-block; margin-right: 9px; vertical-align: -1px; }
 
+/* ---------- Escrutínio de categorias (itens) ---------- */
+
+.alloc-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px;
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -3px;
+  border-radius: 5px;
+}
+.alloc-toggle:hover { color: var(--text); background: var(--surface-3); }
+tr.alloc-open .row-title { font-weight: 600; }
+
+.item-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  margin-left: 8px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  vertical-align: 1px;
+}
+
+.alloc-detail-row > td { padding: 0 !important; background: var(--surface-2); }
+.alloc-detail { padding: 12px 14px 14px; border-left: 2px solid var(--border); margin: 0 0 4px 8px; }
+.alloc-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.detail-summary { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.detail-summary strong { font-variant-numeric: tabular-nums; }
+
+.detail-bar { height: 6px; border-radius: 4px; background: var(--surface-3); overflow: hidden; margin: 10px 0 12px; }
+.detail-bar-fill { height: 100%; border-radius: 4px; transition: width .25s; }
+
+.detail-empty { margin: 4px 0 0; }
+
+.item-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.item-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.item-list li:last-child { border-bottom: none; }
+.item-name { flex: 1; font-size: 13px; }
+.item-amount { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
+
 .income-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
 .income-hero .amount { font-size: 34px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .income-hero .caption { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
