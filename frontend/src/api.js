@@ -116,6 +116,13 @@ export const toEur = (baseValue) => {
   return displayRate === 1 ? n : n / displayRate
 }
 
+/** Converte um valor em EUR (do backend) para a moeda base, para pré-preencher inputs. */
+export const fromEur = (eurValue) => {
+  const n = Number(eurValue)
+  if (!Number.isFinite(n)) return eurValue
+  return displayRate === 1 ? n : Math.round(n * displayRate * 100) / 100
+}
+
 /** Formata um valor em EUR, convertido e apresentado na moeda base. */
 export const fmtEur = (v) =>
   v == null ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: displayCurrency }).format(v * displayRate)

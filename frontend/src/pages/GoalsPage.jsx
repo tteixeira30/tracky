@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, fmtEur, getCurrencySymbol } from '../api'
+import { api, fmtEur, toEur, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import { useToast } from '../components/Toast'
 import { IconCalendar, IconCheck, IconPlus, IconRefresh, IconTarget } from '../components/Icons'
@@ -31,9 +31,9 @@ export default function GoalsPage() {
     try {
       await api.addGoal({
         name: form.name.trim(),
-        targetAmount: Number(form.targetAmount),
-        monthlyAllocation: Number(form.monthlyAllocation),
-        savedAmount: Number(form.savedAmount) || 0,
+        targetAmount: toEur(Number(form.targetAmount)),
+        monthlyAllocation: toEur(Number(form.monthlyAllocation)),
+        savedAmount: toEur(Number(form.savedAmount) || 0),
         autoDeposit: form.autoDeposit,
       })
       setAddModal(false)
@@ -50,14 +50,15 @@ export default function GoalsPage() {
       toast.error('Valor em falta', 'Indica o valor da contribuição.')
       return
     }
+    const eur = toEur(amount)
     try {
-      const updated = await api.contributeGoal(goal.id, amount)
+      const updated = await api.contributeGoal(goal.id, eur)
       setContrib({ ...contrib, [goal.id]: '' })
       await load()
       if (Number(updated.progressPercent) >= 100) {
         toast.success('Objetivo atingido! 🎉', `Parabéns — completaste "${goal.name}".`)
       } else {
-        toast.success('Contribuição registada', `${fmtEur(amount)} adicionados a "${goal.name}".`)
+        toast.success('Contribuição registada', `${fmtEur(eur)} adicionados a "${goal.name}".`)
       }
     } catch (e) { toast.error('Erro ao contribuir', e.message) }
   }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api, fmtEur, toEur, getCurrencySymbol } from '../api'
+import { api, fmtEur, toEur, fromEur, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import DatePicker from '../components/DatePicker'
 import Dropdown from '../components/Dropdown'
@@ -73,7 +73,7 @@ export default function CalendarPage() {
   const openEdit = (e) => {
     setEditing(e)
     setForm({
-      name: e.name, category: e.category, inflow: e.inflow, amount: String(e.amount),
+      name: e.name, category: e.category, inflow: e.inflow, amount: String(fromEur(e.amount)),
       frequency: e.frequency, dayOfMonth: String(e.dayOfMonth || 1), eventDate: e.eventDate || '',
     })
     setAddModal(true)
@@ -173,7 +173,7 @@ export default function CalendarPage() {
           <p>Eventos recorrentes, previsão de saldo e próximos movimentos.</p>
         </div>
         <div className="page-actions">
-          <button className="btn ghost" onClick={() => { setBalanceInput(forecast?.startingBalance != null ? String(forecast.startingBalance) : ''); setBalanceModal(true) }}>
+          <button className="btn ghost" onClick={() => { setBalanceInput(forecast?.startingBalance != null ? String(fromEur(forecast.startingBalance)) : ''); setBalanceModal(true) }}>
             <IconWallet size={15} /> Saldo atual
           </button>
           <button className="btn" onClick={openAdd}><IconPlus size={15} /> Novo evento</button>

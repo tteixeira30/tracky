@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { api, fmtEur, fmtPct, fmtMoneyShort, getCurrencySymbol } from '../api'
+import { api, fmtEur, fmtPct, fmtMoneyShort, toEur, fromEur, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import Dropdown from '../components/Dropdown'
 import { useChartColors } from '../components/ThemeContext'
@@ -127,7 +127,7 @@ export default function InvestmentsPage() {
     }
     setProjParams({
       months: Math.min(projUnit === 'anos' ? h * 12 : h, 600),
-      monthly: Number(projMonthly) || 0,
+      monthly: toEur(Number(projMonthly) || 0),
       rate: projRate === '' ? null : Number(projRate),
     })
   }
@@ -155,9 +155,9 @@ export default function InvestmentsPage() {
         name: form.name.trim(),
         symbol: form.symbol.trim() || null,
         type: form.type,
-        currentValue: Number(form.currentValue),
+        currentValue: toEur(Number(form.currentValue)),
         gainPercent: Number(form.gainPercent) || 0,
-        monthlyContribution: Number(form.monthlyContribution) || null,
+        monthlyContribution: Number(form.monthlyContribution) ? toEur(Number(form.monthlyContribution)) : null,
       })
       setAddModal(false)
       setForm(EMPTY_FORM)
@@ -179,9 +179,9 @@ export default function InvestmentsPage() {
       name: inv.name,
       symbol: inv.symbol || '',
       type: inv.type,
-      currentValue: String(inv.currentValue ?? ''),
+      currentValue: inv.currentValue != null ? String(fromEur(inv.currentValue)) : '',
       gainPercent: String(inv.gainPercent ?? 0),
-      monthlyContribution: inv.monthlyContribution != null ? String(inv.monthlyContribution) : '',
+      monthlyContribution: inv.monthlyContribution != null ? String(fromEur(inv.monthlyContribution)) : '',
     })
   }
 
@@ -196,9 +196,9 @@ export default function InvestmentsPage() {
         name: editForm.name.trim(),
         symbol: editForm.type === 'OTHER' ? null : (editForm.symbol.trim() || null),
         type: editForm.type,
-        currentValue: Number(editForm.currentValue),
+        currentValue: toEur(Number(editForm.currentValue)),
         gainPercent: Number(editForm.gainPercent) || 0,
-        monthlyContribution: Number(editForm.monthlyContribution) || null,
+        monthlyContribution: Number(editForm.monthlyContribution) ? toEur(Number(editForm.monthlyContribution)) : null,
       })
       setEditing(null)
       await load()
@@ -585,7 +585,7 @@ export default function InvestmentsPage() {
             </div>
             {form.currentValue && form.gainPercent && Number(form.gainPercent) > -100 && (
               <span className="hint">
-                Investimento inicial ≈ {fmtEur(Number(form.currentValue) / (1 + Number(form.gainPercent) / 100))}
+                Investimento inicial ≈ {fmtEur(toEur(Number(form.currentValue)) / (1 + Number(form.gainPercent) / 100))}
               </span>
             )}
           </div>
@@ -657,7 +657,7 @@ export default function InvestmentsPage() {
             </div>
             {editForm.currentValue && editForm.gainPercent && Number(editForm.gainPercent) > -100 && (
               <span className="hint">
-                Investimento inicial ≈ {fmtEur(Number(editForm.currentValue) / (1 + Number(editForm.gainPercent) / 100))}
+                Investimento inicial ≈ {fmtEur(toEur(Number(editForm.currentValue)) / (1 + Number(editForm.gainPercent) / 100))}
               </span>
             )}
           </div>

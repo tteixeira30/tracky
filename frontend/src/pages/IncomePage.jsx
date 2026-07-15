@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { api, fmtEur, getCurrencySymbol } from '../api'
+import { api, fmtEur, toEur, fromEur, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import { useToast } from '../components/Toast'
 import { IconChevronLeft, IconChevronRight, IconPencil, IconPlus, IconPie, IconWallet, IconTrash } from '../components/Icons'
@@ -62,9 +62,10 @@ export default function IncomePage() {
   const saveIncome = async () => {
     setBusy(true)
     try {
-      setData(await api.setIncome(Number(incomeInput) || 0, data.month))
+      const eur = toEur(Number(incomeInput) || 0)
+      setData(await api.setIncome(eur, data.month))
       setIncomeModal(false)
-      toast.success('Rendimento atualizado', `${fmtMonth(data.month)}: ${fmtEur(Number(incomeInput) || 0)}.`)
+      toast.success('Rendimento atualizado', `${fmtMonth(data.month)}: ${fmtEur(eur)}.`)
     } catch (e) { toast.error('Erro ao guardar', e.message) }
     finally { setBusy(false) }
   }
@@ -88,7 +89,7 @@ export default function IncomePage() {
     try {
       const base = allocForm.mode === 'percentage'
         ? { name: allocForm.name.trim(), percentage: value }
-        : { name: allocForm.name.trim(), fixedAmount: value }
+        : { name: allocForm.name.trim(), fixedAmount: toEur(value) }
       setData(await api.addAllocation({ ...base, color: allocForm.color }, data.month))
       setAllocModal(false)
       setAllocForm(EMPTY_ALLOC)
@@ -125,7 +126,7 @@ export default function IncomePage() {
 
   const openAddItem = (alloc) => { setItemForm(EMPTY_ITEM); setItemModal({ alloc, item: null }) }
   const openEditItem = (alloc, item) => {
-    setItemForm({ name: item.name, value: String(item.amount) })
+    setItemForm({ name: item.name, value: String(fromEur(item.amount)) })
     setItemModal({ alloc, item })
   }
 
@@ -137,7 +138,7 @@ export default function IncomePage() {
     }
     setBusy(true)
     try {
-      const payload = { name: itemForm.name.trim(), amount: value }
+      const payload = { name: itemForm.name.trim(), amount: toEur(value) }
       const { alloc, item } = itemModal
       setData(item
         ? await api.updateAllocationItem(item.id, payload)
@@ -230,7 +231,7 @@ export default function IncomePage() {
             <div className="caption">Rendimento líquido de {fmtMonth(data.month)}</div>
           </div>
         </div>
-        <button className="btn ghost" onClick={() => { setIncomeInput(income || ''); setIncomeModal(true) }}>
+        <button className="btn ghost" onClick={() => { setIncomeInput(income ? fromEur(income) : ''); setIncomeModal(true) }}>
           <IconPencil size={15} /> Editar
         </button>
       </div>
