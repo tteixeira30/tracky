@@ -5,7 +5,7 @@ RUN mvn -q dependency:go-offline
 COPY src ./src
 RUN mvn -q package -DskipTests
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:24-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 # corre como utilizador não-root (hardening; a porta 8080 não é privilegiada)
