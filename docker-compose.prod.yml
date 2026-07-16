@@ -36,20 +36,16 @@ services:
       - backend
     restart: unless-stopped
 
-  # Caddy trata do HTTPS automático (Let's Encrypt) e encaminha o tráfego.
-  # É o único serviço exposto à internet — db, backend e frontend ficam na rede interna.
-  caddy:
-    image: caddy:2-alpine
-    container_name: tracky-caddy
-    ports:
-      - "80:80"
-      - "443:443"
+  # Cloudflare Tunnel: liga-se à Cloudflare por outbound — nenhuma porta da VM
+  # fica exposta à internet (fecha 80/443 na firewall; sobra só o SSH).
+  # O TLS é terminado na edge da Cloudflare; o hostname público do túnel
+  # aponta para http://frontend:8080 (o nginx já faz proxy de /api ao backend).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: tracky-cloudflared
+    command: tunnel run
     environment:
-      DOMAIN: ${DOMAIN:?define DOMAIN no ficheiro .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?define CLOUDFLARE_TUNNEL_TOKEN no ficheiro .env}
     depends_on:
       - frontend
       - backend
@@ -57,5 +53,3 @@ services:
 
 volumes:
   tracky-dbdata:
-  caddy-data:
-  caddy-config:

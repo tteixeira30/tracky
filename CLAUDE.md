@@ -30,7 +30,7 @@ frontend/                React + Vite (código em src)
   ├─ api.js              Cliente HTTP central + helpers de formatação de moeda
   └─ styles.css          Folha de estilos única (design tokens em :root)
 docker-compose.yml       Ambiente de desenvolvimento (db + backend + frontend)
-docker-compose.prod.yml  Produção (+ Caddy para HTTPS) — ver Deploy
+docker-compose.prod.yml  Produção (+ Cloudflare Tunnel) — ver Deploy
 ```
 
 `CHEATSHEET.md` e `DEPLOY.md` existem **apenas localmente** (estão no `.gitignore`) e contêm detalhes operacionais sensíveis (IPs, comandos SSH). **Não os recries no repositório nem coloques segredos/IPs/domínios/código de convite em ficheiros versionados** (o repo é público).
@@ -106,7 +106,7 @@ Nunca comitar segredos. `.env`, `*.key`, `backup-*.sql` estão no `.gitignore`.
 
 ## Deploy
 
-Produção corre em VM (Docker) com `docker-compose.prod.yml` + **Caddy** (HTTPS automático via Let's Encrypt). Fluxo:
+Produção corre em VM (Docker) com `docker-compose.prod.yml` + **Cloudflare Tunnel** (container `cloudflared`; TLS terminado na edge da Cloudflare, portas 80/443 da VM fechadas — só o túnel outbound liga a VM à internet). O hostname público configura-se no dashboard da Cloudflare (Public Hostname → `http://frontend:8080`); o token do túnel vive no `.env` da VM (`CLOUDFLARE_TUNNEL_TOKEN`). Fluxo:
 
 1. `git push` a partir do PC de desenvolvimento.
 2. Na VM: `git pull` e `docker compose -f docker-compose.prod.yml up -d --build`.
