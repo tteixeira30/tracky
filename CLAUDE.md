@@ -101,6 +101,7 @@ Definidas em `application.yml` com defaults de dev; sobrepostas por ambiente em 
 - `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` — Postgres.
 - `JWT_SECRET` — segredo de assinatura JWT (**trocar em produção**).
 - `TRACKY_INVITE_CODE` — se definido, o registo exige este código; vazio = registo aberto (uso local).
+- `TRACKY_CORS_ORIGINS` — origens CORS permitidas (lista separada por vírgulas); default de dev permite tudo. Em produção: domínio do frontend + origens Capacitor (`http://localhost`, `https://localhost`, `capacitor://localhost`).
 
 Nunca comitar segredos. `.env`, `*.key`, `backup-*.sql` estão no `.gitignore`.
 
@@ -112,6 +113,15 @@ Produção corre em VM (Docker) com `docker-compose.prod.yml` + **Caddy** (HTTPS
 2. Na VM: `git pull` e `docker compose -f docker-compose.prod.yml up -d --build`.
 
 Os detalhes concretos (endereços, SSH, domínio) estão no `CHEATSHEET.md` local (não versionado). **Implementar e testar sempre localmente primeiro**; só fazer deploy quando validado.
+
+## App mobile (PWA + Capacitor Android)
+
+O frontend também corre como app mobile — mesma base de código React:
+
+- **PWA**: `vite-plugin-pwa` em `vite.config.js` (manifest + service worker `autoUpdate`). Ícones em `frontend/public/pwa-*.png`, gerados por `frontend/scripts/generate-icons.mjs` a partir de `public/logo.svg` (correr de novo se o logo mudar). Safe areas (notch) tratadas no `styles.css` via `env(safe-area-inset-*)`.
+- **Capacitor** (`frontend/capacitor.config.json`, appId `com.tracky.app`): embrulha o build Vite numa app Android nativa. O projeto nativo vive em `frontend/android/` (versionado; `local.properties` e o bundle web copiado estão git-ignored).
+- **URL da API**: `api.js` usa `import.meta.env.VITE_API_URL || '/api'`. Na web fica o proxy relativo; nas builds mobile define-se `VITE_API_URL` com o URL absoluto do backend **na hora do build** (o valor fica baked no bundle — nunca comitar builds nem `.env` com o domínio real; instruções completas no `CHEATSHEET.md` local).
+- **Gerar APK**: `npx vite build` (com `VITE_API_URL`) → `npx cap sync android` → `cd android && ./gradlew assembleDebug`. Requer Android SDK local (caminho em `local.properties`) e JDK 21. Ícones nativos: `npx @capacitor/assets generate --android --assetPath assets`.
 
 ## Notas de trabalho
 

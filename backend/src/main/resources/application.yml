@@ -18,3 +18,7 @@ server:
 tracky:
   jwt-secret: ${JWT_SECRET:tracky-dev-secret-nao-usar-em-producao-0123456789abcdef}
   invite-code: ${TRACKY_INVITE_CODE:}
+  # Origens CORS permitidas (lista separada por vírgulas). Em produção definir
+  # TRACKY_CORS_ORIGINS com o domínio do frontend + origens da app mobile
+  # (Capacitor): http://localhost e https://localhost (Android), capacitor://localhost (iOS).
+  cors-origins: ${TRACKY_CORS_ORIGINS:*,http://localhost,https://localhost,capacitor://localhost}

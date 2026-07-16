@@ -1,4 +1,6 @@
-const BASE = '/api'
+// Em web usa o proxy relativo ('/api'); em builds mobile (Capacitor/PWA instalada
+// noutro host) define-se VITE_API_URL com o URL absoluto do backend.
+const BASE = import.meta.env.VITE_API_URL || '/api'
 const TOKEN_KEY = 'tracky_token'
 
 let onUnauthorized = null

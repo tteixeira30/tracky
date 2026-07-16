@@ -203,7 +203,8 @@ body::before {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 16px;
+    /* safe area de topo em ecrãs com notch (PWA/Capacitor, viewport-fit=cover) */
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
     border-right: none;
     border-bottom: 1px solid var(--border);
     z-index: 40;
