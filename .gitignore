@@ -11,6 +11,11 @@ target/
 .bloop/
 .bsp/
 
+# testes
+coverage/
+playwright-report/
+test-results/
+
 # extra safety
 *.key
 backup-*.sql
