@@ -21,9 +21,12 @@ class JwtServiceTest {
     @Test
     void tokenAdulteradoERejeitado() {
         String token = jwtService.generate(42L);
-        // troca o último carácter da assinatura
-        char last = token.charAt(token.length() - 1);
-        String tampered = token.substring(0, token.length() - 1) + (last == 'a' ? 'b' : 'a');
+        // adultera um carácter no MEIO da assinatura — o último carácter em
+        // base64url tem bits finais descartados na descodificação, pelo que
+        // trocá-lo pode não alterar os bytes (teste ficaria flaky)
+        int i = token.lastIndexOf('.') + 5;
+        char c = token.charAt(i);
+        String tampered = token.substring(0, i) + (c == 'a' ? 'b' : 'a') + token.substring(i + 1);
         assertThat(jwtService.validate(tampered)).isEmpty();
     }
 
