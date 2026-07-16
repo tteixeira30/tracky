@@ -46,7 +46,7 @@ class AchievementsControllerTest {
         return new InvestmentController.InvestmentDto(1L, "Ativo", "SYM", type,
                 new BigDecimal(value), null, null, new BigDecimal(value),
                 BigDecimal.ZERO, BigDecimal.ZERO, false,
-                monthlyContribution == null ? null : new BigDecimal(monthlyContribution));
+                monthlyContribution == null ? null : new BigDecimal(monthlyContribution), 1);
     }
 
     private void stubPortfolio(String invested, String current, String gainPct,
@@ -60,7 +60,7 @@ class AchievementsControllerTest {
 
     private GoalController.GoalDto goal(String target, String saved, String progress, boolean auto) {
         return new GoalController.GoalDto(1L, "Objetivo", new BigDecimal(target), BigDecimal.TEN,
-                new BigDecimal(saved), new BigDecimal(progress), null, null, auto);
+                new BigDecimal(saved), new BigDecimal(progress), null, null, auto, 1);
     }
 
     private void stubIncome(List<String> months, String income, String totalPct) {

@@ -7,12 +7,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -193,6 +197,69 @@ class InvestmentControllerTest {
 
         assertThat(resp.investments().get(0).live()).isFalse();
         assertThat(resp.summary().totalCurrent()).isEqualByComparingTo("110");
+    }
+
+    // ---------- dia do reforço mensal (contributionDay) ----------
+
+    @Test
+    void criarComDiaDeReforcoGuardaEDevolveODia() {
+        lenient().when(priceService.getPriceEur(any(), any())).thenReturn(Optional.empty());
+        when(repo.save(any(Investment.class))).thenAnswer(a -> a.getArgument(0));
+
+        var dto = controller.create(user, new InvestmentController.CreateRequest(
+                "PPR", null, Investment.Type.OTHER, new BigDecimal("1000"), BigDecimal.ZERO,
+                new BigDecimal("50"), 15));
+
+        assertThat(dto.contributionDay()).isEqualTo(15);
+        assertThat(dto.monthlyContribution()).isEqualByComparingTo("50");
+    }
+
+    @Test
+    void semDiaIndicadoODtoDevolveODia1PorOmissao() {
+        lenient().when(priceService.getPriceEur(any(), any())).thenReturn(Optional.empty());
+        when(repo.save(any(Investment.class))).thenAnswer(a -> a.getArgument(0));
+
+        var dto = controller.create(user, new InvestmentController.CreateRequest(
+                "PPR", null, Investment.Type.OTHER, new BigDecimal("1000"), BigDecimal.ZERO,
+                new BigDecimal("50"), null));
+
+        assertThat(dto.contributionDay()).isEqualTo(1);
+    }
+
+    @Test
+    void diaForaDe1a31ERejeitadoCom400() {
+        for (int dia : new int[]{0, 32, -3}) {
+            var req = new InvestmentController.CreateRequest("PPR", null, Investment.Type.OTHER,
+                    new BigDecimal("1000"), BigDecimal.ZERO, new BigDecimal("50"), dia);
+            assertThatThrownBy(() -> controller.create(user, req))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @Test
+    void mudarODiaNaoMexeNoLastAppliedMonth() {
+        // mês corrente já aplicado — mudar o dia não pode causar segunda aplicação nem reversão
+        Investment inv = new Investment();
+        inv.setUserId(1L);
+        inv.setName("PPR");
+        inv.setType(Investment.Type.OTHER);
+        inv.setFallbackValue(new BigDecimal("1000"));
+        inv.setInitialValue(new BigDecimal("1000"));
+        inv.setMonthlyContribution(new BigDecimal("50"));
+        inv.setContributionDay(5);
+        inv.setLastAppliedMonth("2025-06");
+        when(repo.findByIdAndUserId(7L, 1L)).thenReturn(Optional.of(inv));
+        when(repo.save(any(Investment.class))).thenAnswer(a -> a.getArgument(0));
+        lenient().when(priceService.getPriceEur(any(), any())).thenReturn(Optional.empty());
+
+        var dto = controller.update(user, 7L, new InvestmentController.UpdateRequest(
+                "PPR", null, Investment.Type.OTHER, new BigDecimal("1000"), BigDecimal.ZERO,
+                new BigDecimal("50"), 20));
+
+        assertThat(dto.contributionDay()).isEqualTo(20);
+        assertThat(inv.getLastAppliedMonth()).isEqualTo("2025-06"); // intocado
     }
 
     @Test

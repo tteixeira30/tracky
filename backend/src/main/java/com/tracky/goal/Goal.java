@@ -32,11 +32,17 @@ public class Goal {
     @Column(precision = 19, scale = 2)
     private BigDecimal savedAmount = BigDecimal.ZERO;
 
-    /** Quando ativo, a alocação mensal é depositada automaticamente no dia 1 de cada mês. */
+    /** Quando ativo, a alocação mensal é depositada automaticamente no dia configurado de cada mês. */
     private Boolean autoDeposit = false;
 
     /** Último mês (formato AAAA-MM) em que o depósito automático foi aplicado. */
     private String lastAppliedMonth;
+
+    /**
+     * Dia do mês (1..31) em que o depósito automático é aplicado. Null (linhas antigas)
+     * equivale a 1 — o comportamento original de aplicar no arranque do mês.
+     */
+    private Integer contributionDay;
 
     private Instant createdAt = Instant.now();
 
@@ -55,5 +61,12 @@ public class Goal {
     public void setAutoDeposit(Boolean autoDeposit) { this.autoDeposit = autoDeposit; }
     public String getLastAppliedMonth() { return lastAppliedMonth; }
     public void setLastAppliedMonth(String lastAppliedMonth) { this.lastAppliedMonth = lastAppliedMonth; }
+    /** Dia efetivo do depósito, sempre em [1..31]; null (legado) devolve 1. */
+    public int getContributionDay() {
+        return contributionDay == null ? 1 : Math.min(31, Math.max(1, contributionDay));
+    }
+    public void setContributionDay(Integer contributionDay) {
+        this.contributionDay = contributionDay == null ? null : Math.min(31, Math.max(1, contributionDay));
+    }
     public Instant getCreatedAt() { return createdAt; }
 }

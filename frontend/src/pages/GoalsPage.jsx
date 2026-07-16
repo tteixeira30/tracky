@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { api, fmtEur, toEur, getCurrencySymbol } from '../api'
+import { api, fmtEur, toEur, fromEur, getCurrencySymbol } from '../api'
 import Modal, { ConfirmDialog } from '../components/Modal'
 import { useToast } from '../components/Toast'
-import { IconCalendar, IconCheck, IconPlus, IconRefresh, IconTarget } from '../components/Icons'
+import { IconCalendar, IconCheck, IconPencil, IconPlus, IconRefresh, IconTarget } from '../components/Icons'
 
-const EMPTY_FORM = { name: '', targetAmount: '', monthlyAllocation: '', savedAmount: '', autoDeposit: false }
+const EMPTY_FORM = { name: '', targetAmount: '', monthlyAllocation: '', savedAmount: '', autoDeposit: false, contributionDay: '1' }
 
 export default function GoalsPage() {
   const toast = useToast()
@@ -12,6 +12,8 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState(null)
   const [addModal, setAddModal] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState(EMPTY_FORM)
   const [contrib, setContrib] = useState({})
   const [toDelete, setToDelete] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -35,12 +37,47 @@ export default function GoalsPage() {
         monthlyAllocation: toEur(Number(form.monthlyAllocation)),
         savedAmount: toEur(Number(form.savedAmount) || 0),
         autoDeposit: form.autoDeposit,
+        contributionDay: form.autoDeposit ? (Number(form.contributionDay) || 1) : null,
       })
       setAddModal(false)
       setForm(EMPTY_FORM)
       await load()
       toast.success('Objetivo criado', `"${form.name.trim()}" adicionado aos teus objetivos.`)
     } catch (e) { toast.error('Erro ao criar', e.message) }
+    finally { setBusy(false) }
+  }
+
+  const openEdit = (g) => {
+    setEditing(g)
+    setEditForm({
+      name: g.name,
+      targetAmount: String(fromEur(g.targetAmount)),
+      monthlyAllocation: String(fromEur(g.monthlyAllocation)),
+      savedAmount: String(fromEur(g.savedAmount)),
+      autoDeposit: g.autoDeposit,
+      contributionDay: String(g.contributionDay ?? 1),
+    })
+  }
+
+  const saveEdit = async () => {
+    if (!editForm.name.trim() || !editForm.targetAmount || !editForm.monthlyAllocation) {
+      toast.error('Campos em falta', 'Indica o nome, o valor do objetivo e a alocação mensal.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.updateGoal(editing.id, {
+        name: editForm.name.trim(),
+        targetAmount: toEur(Number(editForm.targetAmount)),
+        monthlyAllocation: toEur(Number(editForm.monthlyAllocation)),
+        savedAmount: toEur(Number(editForm.savedAmount) || 0),
+        autoDeposit: editForm.autoDeposit,
+        contributionDay: editForm.autoDeposit ? (Number(editForm.contributionDay) || 1) : null,
+      })
+      setEditing(null)
+      await load()
+      toast.success('Objetivo atualizado', `"${editForm.name.trim()}" foi atualizado.`)
+    } catch (e) { toast.error('Erro ao atualizar', e.message) }
     finally { setBusy(false) }
   }
 
@@ -144,7 +181,12 @@ export default function GoalsPage() {
                     </span>
                     {g.name}
                   </div>
-                  <button className="icon-btn danger" onClick={() => setToDelete(g)} aria-label="Eliminar">✕</button>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="icon-btn" onClick={() => openEdit(g)} aria-label="Editar" title="Editar">
+                      <IconPencil size={16} />
+                    </button>
+                    <button className="icon-btn danger" onClick={() => setToDelete(g)} aria-label="Eliminar">✕</button>
+                  </div>
                 </div>
 
                 <div>
@@ -160,7 +202,7 @@ export default function GoalsPage() {
 
                 <div className="goal-meta">
                   <span className="badge accent">{fmtEur(g.monthlyAllocation)}/mês</span>
-                  {g.autoDeposit && <span className="badge live">Auto · dia 1</span>}
+                  {g.autoDeposit && <span className="badge live">Auto · dia {g.contributionDay ?? 1}</span>}
                   {done ? (
                     <span className="badge live"><IconCheck size={12} /> Atingido</span>
                   ) : (
@@ -241,10 +283,83 @@ export default function GoalsPage() {
               <span>Depósito automático mensal</span>
             </label>
             <span className="hint">
-              A alocação mensal é adicionada automaticamente no dia 1 de cada mês (com a app ligada, ou no arranque seguinte).
+              A alocação mensal é adicionada automaticamente no dia escolhido de cada mês (com a app ligada, ou no arranque seguinte).
               Também podes usar o botão "Simular depósito mensal".
             </span>
           </div>
+          {form.autoDeposit && Number(form.monthlyAllocation) > 0 && (
+            <div className="field full">
+              <label>Dia do mês do depósito</label>
+              <div className="input-affix" style={{ width: 110 }}>
+                <input type="number" min="1" max="31" step="1" value={form.contributionDay}
+                       onChange={(e) => setForm({ ...form, contributionDay: e.target.value })} />
+                <span className="affix">do mês</span>
+              </div>
+              <span className="hint">Entre 1 e 31 — em meses mais curtos é aplicado no último dia.</span>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <Modal open={!!editing} onClose={() => setEditing(null)}
+             title="Editar objetivo" subtitle="Ajusta a meta, a alocação mensal e o depósito automático."
+             footer={
+               <>
+                 <button className="btn ghost" onClick={() => setEditing(null)}>Cancelar</button>
+                 <button className="btn" onClick={saveEdit} disabled={busy}>{busy ? 'A guardar…' : 'Guardar'}</button>
+               </>
+             }>
+        <div className="form-grid">
+          <div className="field full">
+            <label>Nome</label>
+            <input autoFocus value={editForm.name}
+                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Valor do objetivo</label>
+            <div className="input-affix">
+              <input type="number" min="0" step="0.01" value={editForm.targetAmount}
+                     onChange={(e) => setEditForm({ ...editForm, targetAmount: e.target.value })} />
+              <span className="affix">{cur}</span>
+            </div>
+          </div>
+          <div className="field">
+            <label>Alocação mensal</label>
+            <div className="input-affix">
+              <input type="number" min="0" step="0.01" value={editForm.monthlyAllocation}
+                     onChange={(e) => setEditForm({ ...editForm, monthlyAllocation: e.target.value })} />
+              <span className="affix">{cur}</span>
+            </div>
+          </div>
+          <div className="field full">
+            <label>Já poupado</label>
+            <div className="input-affix">
+              <input type="number" min="0" step="0.01" value={editForm.savedAmount}
+                     onChange={(e) => setEditForm({ ...editForm, savedAmount: e.target.value })} />
+              <span className="affix">{cur}</span>
+            </div>
+          </div>
+          <div className="field full">
+            <label className="check-row">
+              <input type="checkbox" checked={editForm.autoDeposit}
+                     onChange={(e) => setEditForm({ ...editForm, autoDeposit: e.target.checked })} />
+              <span>Depósito automático mensal</span>
+            </label>
+          </div>
+          {editForm.autoDeposit && Number(editForm.monthlyAllocation) > 0 && (
+            <div className="field full">
+              <label>Dia do mês do depósito</label>
+              <div className="input-affix" style={{ width: 110 }}>
+                <input type="number" min="1" max="31" step="1" value={editForm.contributionDay}
+                       onChange={(e) => setEditForm({ ...editForm, contributionDay: e.target.value })} />
+                <span className="affix">do mês</span>
+              </div>
+              <span className="hint">
+                Entre 1 e 31 — em meses mais curtos é aplicado no último dia.
+                Mudar o dia só afeta os próximos depósitos; os já aplicados não se repetem.
+              </span>
+            </div>
+          )}
         </div>
       </Modal>
 

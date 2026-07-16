@@ -7,11 +7,14 @@ import com.tracky.investment.InvestmentRepository;
 import com.tracky.investment.PriceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -21,7 +24,11 @@ import java.util.Optional;
 /**
  * Aplica os depósitos mensais automáticos a objetivos e investimentos.
  * Modo calendário: aplica os meses em atraso desde o último aplicado (catch-up,
- * porque a app corre localmente e pode estar desligada no dia 1).
+ * porque a app corre localmente e pode estar desligada no dia do reforço).
+ * O mês corrente só é aplicado a partir do dia configurado ({@code contributionDay},
+ * clampado ao comprimento do mês); meses inteiros em atraso aplicam-se na íntegra
+ * independentemente do dia. Mudar o dia nunca reaplica nem desfaz meses já aplicados —
+ * é o {@code lastAppliedMonth} que manda.
  * Modo forçado (botão "Simular"): aplica exatamente um mês e avança o marcador,
  * para o scheduler não voltar a aplicar o mesmo mês.
  */
@@ -33,12 +40,21 @@ public class ContributionService {
     private final GoalRepository goalRepository;
     private final InvestmentRepository investmentRepository;
     private final PriceService priceService;
+    private final Clock clock;
 
+    @Autowired
     public ContributionService(GoalRepository goalRepository, InvestmentRepository investmentRepository,
                                PriceService priceService) {
+        this(goalRepository, investmentRepository, priceService, Clock.systemDefaultZone());
+    }
+
+    /** Visível para testes — permite fixar a data "de hoje". */
+    ContributionService(GoalRepository goalRepository, InvestmentRepository investmentRepository,
+                        PriceService priceService, Clock clock) {
         this.goalRepository = goalRepository;
         this.investmentRepository = investmentRepository;
         this.priceService = priceService;
+        this.clock = clock;
     }
 
     public record AppliedItem(String type, String name, int months, BigDecimal amount) {}
@@ -52,7 +68,7 @@ public class ContributionService {
             for (Goal goal : goalRepository.findByUserIdOrderByIdAsc(userId)) {
                 if (!goal.isAutoDeposit() || goal.getMonthlyAllocation() == null
                         || goal.getMonthlyAllocation().signum() <= 0) continue;
-                int months = monthsToApply(goal.getLastAppliedMonth(), force);
+                int months = monthsToApply(goal.getLastAppliedMonth(), force, goal.getContributionDay());
                 if (months <= 0) continue;
                 BigDecimal amount = goal.getMonthlyAllocation().multiply(BigDecimal.valueOf(months));
                 goal.setSavedAmount(goal.getSavedAmount().add(amount));
@@ -65,7 +81,7 @@ public class ContributionService {
         if (!"goals".equals(scope)) {
             for (Investment inv : investmentRepository.findByUserIdOrderByIdAsc(userId)) {
                 if (inv.getMonthlyContribution() == null || inv.getMonthlyContribution().signum() <= 0) continue;
-                int months = monthsToApply(inv.getLastAppliedMonth(), force);
+                int months = monthsToApply(inv.getLastAppliedMonth(), force, inv.getContributionDay());
                 if (months <= 0) continue;
                 BigDecimal amount = inv.getMonthlyContribution().multiply(BigDecimal.valueOf(months));
 
@@ -91,15 +107,19 @@ public class ContributionService {
         return new ApplyResult(applied, total.setScale(2, RoundingMode.HALF_UP));
     }
 
-    private int monthsToApply(String lastAppliedMonth, boolean force) {
+    private int monthsToApply(String lastAppliedMonth, boolean force, int contributionDay) {
         if (force) return 1;
         if (lastAppliedMonth == null) return 0;
-        long pending = ChronoUnit.MONTHS.between(YearMonth.parse(lastAppliedMonth), YearMonth.now());
+        LocalDate today = LocalDate.now(clock);
+        long pending = ChronoUnit.MONTHS.between(YearMonth.parse(lastAppliedMonth), YearMonth.from(today));
+        // o mês corrente só conta a partir do dia configurado (dia 31 num mês de 30 → aplica no dia 30);
+        // os meses inteiros em atraso aplicam-se sempre, independentemente do dia
+        if (pending > 0 && today.getDayOfMonth() < Math.min(contributionDay, today.lengthOfMonth())) pending--;
         return (int) Math.max(0, pending);
     }
 
     private String advance(String lastAppliedMonth, int months) {
-        YearMonth base = lastAppliedMonth == null ? YearMonth.now() : YearMonth.parse(lastAppliedMonth);
+        YearMonth base = lastAppliedMonth == null ? YearMonth.now(clock) : YearMonth.parse(lastAppliedMonth);
         return base.plusMonths(months).toString();
     }
 }

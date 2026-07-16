@@ -5,8 +5,10 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -26,11 +28,11 @@ public class GoalController {
 
     public record GoalRequest(@NotBlank String name, @NotNull @Positive BigDecimal targetAmount,
                               @NotNull @Positive BigDecimal monthlyAllocation, BigDecimal savedAmount,
-                              Boolean autoDeposit) {}
+                              Boolean autoDeposit, Integer contributionDay) {}
     public record ContributionRequest(@NotNull BigDecimal amount) {}
     public record GoalDto(Long id, String name, BigDecimal targetAmount, BigDecimal monthlyAllocation,
                           BigDecimal savedAmount, BigDecimal progressPercent, Integer monthsRemaining,
-                          LocalDate estimatedDate, boolean autoDeposit) {}
+                          LocalDate estimatedDate, boolean autoDeposit, int contributionDay) {}
 
     @GetMapping
     public List<GoalDto> list(@AuthenticationPrincipal User user) {
@@ -67,6 +69,9 @@ public class GoalController {
     }
 
     private void apply(Goal g, GoalRequest req) {
+        if (req.contributionDay() != null && (req.contributionDay() < 1 || req.contributionDay() > 31)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica um dia do mês entre 1 e 31.");
+        }
         g.setName(req.name());
         g.setTargetAmount(req.targetAmount());
         g.setMonthlyAllocation(req.monthlyAllocation());
@@ -75,6 +80,8 @@ public class GoalController {
         // ao ativar, marca o mês atual como já aplicado — o primeiro depósito automático é no próximo mês
         if (auto && !g.isAutoDeposit()) g.setLastAppliedMonth(YearMonth.now().toString());
         g.setAutoDeposit(auto);
+        // mudar o dia não toca no lastAppliedMonth — meses já aplicados nunca se repetem nem se desfazem
+        g.setContributionDay(req.contributionDay());
     }
 
     private GoalDto toDto(Goal g) {
@@ -92,6 +99,6 @@ public class GoalController {
             estimated = LocalDate.now().plusMonths(months);
         }
         return new GoalDto(g.getId(), g.getName(), g.getTargetAmount(), g.getMonthlyAllocation(),
-                g.getSavedAmount(), progress, months, estimated, g.isAutoDeposit());
+                g.getSavedAmount(), progress, months, estimated, g.isAutoDeposit(), g.getContributionDay());
     }
 }

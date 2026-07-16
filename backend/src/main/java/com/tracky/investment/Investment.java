@@ -45,6 +45,12 @@ public class Investment {
     /** Último mês (formato AAAA-MM) em que o reforço mensal foi aplicado. */
     private String lastAppliedMonth;
 
+    /**
+     * Dia do mês (1..31) em que o reforço mensal é aplicado. Null (linhas antigas)
+     * equivale a 1 — o comportamento original de aplicar no arranque do mês.
+     */
+    private Integer contributionDay;
+
     private Instant createdAt = Instant.now();
 
     public Long getId() { return id; }
@@ -66,5 +72,12 @@ public class Investment {
     public void setMonthlyContribution(BigDecimal monthlyContribution) { this.monthlyContribution = monthlyContribution; }
     public String getLastAppliedMonth() { return lastAppliedMonth; }
     public void setLastAppliedMonth(String lastAppliedMonth) { this.lastAppliedMonth = lastAppliedMonth; }
+    /** Dia efetivo do reforço, sempre em [1..31]; null (legado) devolve 1. */
+    public int getContributionDay() {
+        return contributionDay == null ? 1 : Math.min(31, Math.max(1, contributionDay));
+    }
+    public void setContributionDay(Integer contributionDay) {
+        this.contributionDay = contributionDay == null ? null : Math.min(31, Math.max(1, contributionDay));
+    }
     public Instant getCreatedAt() { return createdAt; }
 }

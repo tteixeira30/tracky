@@ -307,48 +307,58 @@ export default function IncomePage() {
                           </td>
                         </tr>
                         {isOpen && (
-                          <tr className="alloc-detail-row">
-                            <td colSpan={5}>
-                              <div className="alloc-detail">
-                                <div className="alloc-detail-head">
-                                  <div className="detail-summary">
-                                    <span>Gasto <strong>{fmtEur(spent)}</strong> de {fmtEur(budget)}</span>
-                                    <span className={overspent ? 'neg' : 'dim'}>
-                                      {overspent
-                                        ? `${fmtEur(spent - budget)} acima do orçamento`
-                                        : `${fmtEur(remaining)} por escrutinar`}
-                                    </span>
+                          <>
+                            {items.length === 0 ? (
+                              <tr className="subrow subrow-empty" style={{ '--alloc-color': color }}>
+                                <td colSpan={3}>
+                                  <div className="subrow-line">
+                                    <span className="subrow-hint">Sem itens — ex: Netflix, Claude, HBO.</span>
                                   </div>
-                                  <button className="btn small ghost" onClick={() => openAddItem(a)}>
-                                    <IconPlus size={13} /> Item
+                                </td>
+                                <td></td>
+                                <td></td>
+                              </tr>
+                            ) : (
+                              items.map((it) => (
+                                <tr key={it.id} className="subrow" style={{ '--alloc-color': color }}>
+                                  <td colSpan={3}>
+                                    <div className="subrow-line">
+                                      <span className="subrow-name" title={it.name}>{it.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="subrow-amount">{fmtEur(it.amount)}</td>
+                                  <td className="subrow-actions">
+                                    <button className="icon-btn" onClick={() => openEditItem(a, it)}
+                                            aria-label={`Editar ${it.name}`}><IconPencil size={13} /></button>
+                                    <button className="icon-btn danger"
+                                            onClick={() => setItemToDelete({ item: it, allocName: a.name })}
+                                            aria-label={`Remover ${it.name}`}><IconTrash size={13} /></button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                            <tr className="subrow subrow-foot" style={{ '--alloc-color': color }}>
+                              <td colSpan={3}>
+                                <div className="subrow-line">
+                                  <button className="btn small ghost subrow-add" onClick={() => openAddItem(a)}>
+                                    <IconPlus size={12} /> Item
                                   </button>
+                                  <span className={`subrow-chip${overspent ? ' over' : ''}`}>
+                                    {overspent ? `${fmtEur(spent - budget)} acima` : `${fmtEur(remaining)} livre`}
+                                  </span>
                                 </div>
-                                <div className="detail-bar">
-                                  <div className="detail-bar-fill"
+                              </td>
+                              <td className={`subrow-total ${overspent ? 'neg' : 'dim'}`}>
+                                {fmtEur(spent)}<span className="subrow-of"> / {fmtEur(budget)}</span>
+                                <div className="subrow-meter" aria-hidden="true"
+                                     title={`Gasto ${fmtEur(spent)} de ${fmtEur(budget)}`}>
+                                  <div className="subrow-meter-fill"
                                        style={{ width: `${spentPct}%`, background: overspent ? 'var(--red)' : color }} />
                                 </div>
-                                {items.length === 0 ? (
-                                  <p className="hint detail-empty">
-                                    Ainda sem itens. Adiciona o que gastas nesta categoria — ex: Netflix, Claude, HBO.
-                                  </p>
-                                ) : (
-                                  <ul className="item-list">
-                                    {items.map((it) => (
-                                      <li key={it.id}>
-                                        <span className="item-name">{it.name}</span>
-                                        <span className="item-amount">{fmtEur(it.amount)}</span>
-                                        <button className="icon-btn" onClick={() => openEditItem(a, it)}
-                                                aria-label="Editar item"><IconPencil size={13} /></button>
-                                        <button className="icon-btn danger"
-                                                onClick={() => setItemToDelete({ item: it, allocName: a.name })}
-                                                aria-label="Remover item"><IconTrash size={13} /></button>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
+                              </td>
+                              <td></td>
+                            </tr>
+                          </>
                         )}
                       </Fragment>
                     )
