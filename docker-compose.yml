@@ -34,7 +34,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:80"
+      - "3000:8080" # nginx-unprivileged escuta em 8080 (não-root)
 
 volumes:
   tracky-dbdata:

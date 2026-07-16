@@ -1,0 +1,10 @@
+# Perfil de teste: o datasource vem do Testcontainers via @ServiceConnection
+# (ver AbstractIntegrationTest) — não definir aqui.
+tracky:
+  jwt-secret: test-secret-0123456789-0123456789-0123456789
+  invite-code: ""
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update   # igual à produção; corre contra um container descartável
