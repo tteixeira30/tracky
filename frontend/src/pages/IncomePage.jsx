@@ -375,7 +375,7 @@ export default function IncomePage() {
           <div className="card-header">
             <div>
               <h3>Visão geral</h3>
-              <div className="sub">Distribuição de {fmtMonth(data.month)} em euros</div>
+              <div className="sub">Distribuição de {fmtMonth(data.month)}</div>
             </div>
           </div>
           {pieData.length === 0 || (income === 0 && Number(data.totalAllocated) === 0) ? (
