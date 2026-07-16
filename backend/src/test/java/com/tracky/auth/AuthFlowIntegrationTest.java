@@ -111,4 +111,36 @@ class AuthFlowIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(get("/api/goals").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    void moedaBaseValidaEAlterada_invalidaDevolve400() throws Exception {
+        String email = uniqueEmail();
+        String body = mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson(email)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String token = com.jayway.jsonpath.JsonPath.read(body, "$.token");
+
+        // moeda suportada (lista estática — sem chamadas de rede)
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/auth/me/currency")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"baseCurrency":"usd"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.baseCurrency").value("USD"));
+
+        // moeda inventada é rejeitada
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/auth/me/currency")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"baseCurrency":"XYZ"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
 }
