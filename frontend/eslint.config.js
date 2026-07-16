@@ -4,12 +4,14 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist', 'coverage', 'node_modules'] },
+  // android/ contém o bundle web copiado pelo Capacitor (git-ignored, mas
+  // presente localmente) — não é código-fonte para lint
+  { ignores: ['dist', 'coverage', 'node_modules', 'android'] },
   js.configs.recommended,
   reactHooks.configs.flat.recommended,
   reactRefresh.configs.vite,
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['**/*.{js,mjs,jsx}'],
     languageOptions: {
       ecmaVersion: 2023,
       globals: { ...globals.browser, ...globals.node },
