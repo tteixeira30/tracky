@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 /**
  * Aplica os depósitos mensais automaticamente. Corre no arranque (catch-up de
  * meses perdidos enquanto a app esteve desligada) e diariamente às 00:10 —
- * só há efeito quando um novo mês começou desde a última aplicação.
+ * só há efeito quando o mês pendente chegou ao dia configurado do reforço.
  */
 @Component
 public class ContributionScheduler {

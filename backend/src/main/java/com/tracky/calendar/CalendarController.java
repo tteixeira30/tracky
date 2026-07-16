@@ -167,21 +167,21 @@ public class CalendarController {
             }
         }
 
-        // Derivados: reforços mensais de investimentos (dia 1) — saída de dinheiro da conta
+        // Derivados: reforços mensais de investimentos (no dia configurado) — saída de dinheiro da conta
         for (Investment inv : investmentRepo.findByUserIdOrderByIdAsc(user.getId())) {
             BigDecimal c = inv.getMonthlyContribution();
             if (c != null && c.signum() > 0) {
-                for (LocalDate d : monthlyDates(1, from, to)) {
+                for (LocalDate d : monthlyDates(inv.getContributionDay(), from, to)) {
                     out.add(new Occurrence(d, "Reforço · " + inv.getName(), CalendarEvent.Category.SAVING,
                             false, c, "INVESTMENT", inv.getId()));
                 }
             }
         }
 
-        // Derivados: depósitos automáticos de objetivos (dia 1)
+        // Derivados: depósitos automáticos de objetivos (no dia configurado)
         for (Goal g : goalRepo.findByUserIdOrderByIdAsc(user.getId())) {
             if (g.isAutoDeposit() && g.getMonthlyAllocation() != null && g.getMonthlyAllocation().signum() > 0) {
-                for (LocalDate d : monthlyDates(1, from, to)) {
+                for (LocalDate d : monthlyDates(g.getContributionDay(), from, to)) {
                     out.add(new Occurrence(d, "Depósito · " + g.getName(), CalendarEvent.Category.SAVING,
                             false, g.getMonthlyAllocation(), "GOAL", g.getId()));
                 }

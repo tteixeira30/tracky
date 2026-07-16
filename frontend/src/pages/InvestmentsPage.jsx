@@ -23,7 +23,7 @@ const TYPES = [
 
 const typeLabel = (t) => TYPES.find((x) => x.id === t)?.label ?? t
 
-const EMPTY_FORM = { name: '', symbol: '', type: 'ETF', currentValue: '', gainPercent: '', monthlyContribution: '' }
+const EMPTY_FORM = { name: '', symbol: '', type: 'ETF', currentValue: '', gainPercent: '', monthlyContribution: '', contributionDay: '1' }
 
 // rampa sequencial (cenários ordenados) validada para o fundo escuro;
 // o pessimista é o mais saliente de propósito — a projeção é conservadora.
@@ -158,6 +158,7 @@ export default function InvestmentsPage() {
         currentValue: toEur(Number(form.currentValue)),
         gainPercent: Number(form.gainPercent) || 0,
         monthlyContribution: Number(form.monthlyContribution) ? toEur(Number(form.monthlyContribution)) : null,
+        contributionDay: Number(form.monthlyContribution) ? (Number(form.contributionDay) || 1) : null,
       })
       setAddModal(false)
       setForm(EMPTY_FORM)
@@ -182,6 +183,7 @@ export default function InvestmentsPage() {
       currentValue: inv.currentValue != null ? String(fromEur(inv.currentValue)) : '',
       gainPercent: String(inv.gainPercent ?? 0),
       monthlyContribution: inv.monthlyContribution != null ? String(fromEur(inv.monthlyContribution)) : '',
+      contributionDay: String(inv.contributionDay ?? 1),
     })
   }
 
@@ -199,6 +201,7 @@ export default function InvestmentsPage() {
         currentValue: toEur(Number(editForm.currentValue)),
         gainPercent: Number(editForm.gainPercent) || 0,
         monthlyContribution: Number(editForm.monthlyContribution) ? toEur(Number(editForm.monthlyContribution)) : null,
+        contributionDay: Number(editForm.monthlyContribution) ? (Number(editForm.contributionDay) || 1) : null,
       })
       setEditing(null)
       await load()
@@ -509,7 +512,7 @@ export default function InvestmentsPage() {
                           <div className="row-sub">
                             {inv.symbol}
                             {inv.symbol && inv.monthlyContribution && ' · '}
-                            {inv.monthlyContribution && `+${fmtEur(inv.monthlyContribution)}/mês`}
+                            {inv.monthlyContribution && `+${fmtEur(inv.monthlyContribution)}/mês · dia ${inv.contributionDay ?? 1}`}
                           </div>
                         )}
                       </td>
@@ -597,10 +600,21 @@ export default function InvestmentsPage() {
               <span className="affix">{cur}/mês</span>
             </div>
             <span className="hint">
-              Adicionado ao investimento no dia 1 de cada mês (ou com o botão "Simular reforço mensal").
+              Adicionado ao investimento no dia escolhido de cada mês (ou com o botão "Simular reforço mensal").
               Em ativos com cotação, compra unidades ao preço do momento.
             </span>
           </div>
+          {Number(form.monthlyContribution) > 0 && (
+            <div className="field full">
+              <label>Dia do mês do reforço</label>
+              <div className="input-affix" style={{ width: 110 }}>
+                <input type="number" min="1" max="31" step="1" value={form.contributionDay}
+                       onChange={(e) => setForm({ ...form, contributionDay: e.target.value })} />
+                <span className="affix">do mês</span>
+              </div>
+              <span className="hint">Entre 1 e 31 — em meses mais curtos é aplicado no último dia.</span>
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -670,6 +684,20 @@ export default function InvestmentsPage() {
             </div>
             <span className="hint">Deixa vazio ou 0 para desativar o reforço mensal.</span>
           </div>
+          {Number(editForm.monthlyContribution) > 0 && (
+            <div className="field full">
+              <label>Dia do mês do reforço</label>
+              <div className="input-affix" style={{ width: 110 }}>
+                <input type="number" min="1" max="31" step="1" value={editForm.contributionDay}
+                       onChange={(e) => setEditForm({ ...editForm, contributionDay: e.target.value })} />
+                <span className="affix">do mês</span>
+              </div>
+              <span className="hint">
+                Entre 1 e 31 — em meses mais curtos é aplicado no último dia.
+                Mudar o dia só afeta os próximos reforços; os já aplicados não se repetem.
+              </span>
+            </div>
+          )}
         </div>
       </Modal>
 

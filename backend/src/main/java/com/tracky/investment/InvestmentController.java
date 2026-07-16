@@ -35,14 +35,14 @@ public class InvestmentController {
 
     public record CreateRequest(@NotBlank String name, String symbol, @NotNull Investment.Type type,
                                 @NotNull BigDecimal currentValue, @NotNull BigDecimal gainPercent,
-                                BigDecimal monthlyContribution) {}
+                                BigDecimal monthlyContribution, Integer contributionDay) {}
     public record UpdateRequest(@NotBlank String name, String symbol, Investment.Type type,
                                 BigDecimal currentValue, BigDecimal gainPercent,
-                                BigDecimal monthlyContribution) {}
+                                BigDecimal monthlyContribution, Integer contributionDay) {}
     public record InvestmentDto(Long id, String name, String symbol, Investment.Type type,
                                 BigDecimal initialValue, BigDecimal quantity, BigDecimal currentPrice,
                                 BigDecimal currentValue, BigDecimal gain, BigDecimal gainPercent, boolean live,
-                                BigDecimal monthlyContribution) {}
+                                BigDecimal monthlyContribution, int contributionDay) {}
     public record PortfolioPoint(LocalDate date, BigDecimal value) {}
     public record Summary(BigDecimal totalInvested, BigDecimal totalCurrent,
                           BigDecimal totalGain, BigDecimal totalGainPercent) {}
@@ -78,7 +78,7 @@ public class InvestmentController {
         inv.setType(req.type());
         inv.setSymbol(normalizeSymbol(req.symbol(), req.type()));
         applyValue(inv, req.currentValue(), req.gainPercent());
-        applyMonthlyContribution(inv, req.monthlyContribution());
+        applyMonthlyContribution(inv, req.monthlyContribution(), req.contributionDay());
         return enrich(repo.save(inv));
     }
 
@@ -92,7 +92,7 @@ public class InvestmentController {
         if (req.currentValue() != null) {
             applyValue(inv, req.currentValue(), req.gainPercent() != null ? req.gainPercent() : BigDecimal.ZERO);
         }
-        applyMonthlyContribution(inv, req.monthlyContribution());
+        applyMonthlyContribution(inv, req.monthlyContribution(), req.contributionDay());
         return enrich(repo.save(inv));
     }
 
@@ -121,13 +121,21 @@ public class InvestmentController {
         }
     }
 
-    /** Define ou remove o reforço mensal; ao ativar de novo marca o mês atual como já feito. */
-    private void applyMonthlyContribution(Investment inv, BigDecimal monthlyContribution) {
+    /**
+     * Define ou remove o reforço mensal; ao ativar de novo marca o mês atual como já feito.
+     * Mudar o dia do reforço só afeta o presente/futuro — o lastAppliedMonth não é tocado,
+     * portanto meses já aplicados nunca se repetem nem se desfazem.
+     */
+    private void applyMonthlyContribution(Investment inv, BigDecimal monthlyContribution, Integer contributionDay) {
+        if (contributionDay != null && (contributionDay < 1 || contributionDay > 31)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica um dia do mês entre 1 e 31.");
+        }
         boolean active = monthlyContribution != null && monthlyContribution.signum() > 0;
         if (active && inv.getMonthlyContribution() == null) {
             inv.setLastAppliedMonth(YearMonth.now().toString());
         }
         inv.setMonthlyContribution(active ? monthlyContribution : null);
+        inv.setContributionDay(contributionDay);
     }
 
     @DeleteMapping("/{id}")
@@ -257,7 +265,8 @@ public class InvestmentController {
                 : gain.multiply(BigDecimal.valueOf(100)).divide(inv.getInitialValue(), 2, RoundingMode.HALF_UP);
         return new InvestmentDto(inv.getId(), inv.getName(), inv.getSymbol(), inv.getType(),
                 scale(inv.getInitialValue()), inv.getQuantity(), price.map(this::scale).orElse(null),
-                scale(currentValue), scale(gain), gainPct, live, inv.getMonthlyContribution());
+                scale(currentValue), scale(gain), gainPct, live, inv.getMonthlyContribution(),
+                inv.getContributionDay());
     }
 
     private BigDecimal scale(BigDecimal v) {

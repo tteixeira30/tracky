@@ -131,6 +131,7 @@ class CalendarControllerTest {
 
     @Test
     void reforcosDeInvestimentosEDepositosDeObjetivosGeramOcorrenciasNoDia1() {
+        // sem dia configurado (linhas antigas a null) mantém-se o comportamento original: dia 1
         when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
 
         Investment inv = new Investment();
@@ -152,5 +153,33 @@ class CalendarControllerTest {
         assertThat(resp.occurrences()).allMatch(o -> o.date().equals(LocalDate.of(2025, 3, 1)));
         assertThat(resp.occurrences()).extracting("source").containsExactlyInAnyOrder("INVESTMENT", "GOAL");
         assertThat(resp.outflows()).isEqualByComparingTo("250");
+    }
+
+    @Test
+    void reforcosEDepositosUsamODiaConfiguradoClampadoAoComprimentoDoMes() {
+        when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
+
+        Investment inv = new Investment();
+        inv.setUserId(1L);
+        inv.setName("ETF Mundo");
+        inv.setMonthlyContribution(new BigDecimal("100"));
+        inv.setContributionDay(15);
+        when(investmentRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(inv));
+
+        Goal goal = new Goal();
+        goal.setUserId(1L);
+        goal.setName("Férias");
+        goal.setAutoDeposit(true);
+        goal.setMonthlyAllocation(new BigDecimal("150"));
+        goal.setContributionDay(31); // fevereiro de 2025 só tem 28 dias → clampa ao dia 28
+        when(goalRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(goal));
+
+        var resp = controller.month(user, "2025-02");
+
+        assertThat(resp.occurrences()).hasSize(2);
+        var invOcc = resp.occurrences().stream().filter(o -> o.source().equals("INVESTMENT")).findFirst().orElseThrow();
+        var goalOcc = resp.occurrences().stream().filter(o -> o.source().equals("GOAL")).findFirst().orElseThrow();
+        assertThat(invOcc.date()).isEqualTo(LocalDate.of(2025, 2, 15));
+        assertThat(goalOcc.date()).isEqualTo(LocalDate.of(2025, 2, 28));
     }
 }
