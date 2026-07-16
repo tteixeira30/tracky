@@ -1,0 +1,8 @@
+{
+  "appId": "com.tracky.app",
+  "appName": "Tracky",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  }
+}
