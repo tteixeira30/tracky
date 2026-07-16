@@ -192,6 +192,11 @@ body::before {
 .bottom-nav { display: none; }
 
 @media (max-width: 900px) {
+  /* Rede de segurança: se algum conteúdo exceder a largura do ecrã, corta-o
+     em vez de deixar o layout viewport esticar — quando estica, os elementos
+     position: fixed (bottom-nav) ficam desposicionados e inacessíveis. */
+  html, body { max-width: 100%; overflow-x: hidden; }
+
   .shell { flex-direction: column; }
 
   /* sidebar vira barra de topo fixa: marca à esquerda, utilizador à direita */
@@ -1163,7 +1168,9 @@ tr.alloc-open .row-title { font-weight: 600; }
 
 .dash-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, 1fr) em vez de 1fr: itens de grid têm min-width auto e não
+     encolhem abaixo do conteúdo — nomes longos rebentavam a largura em mobile */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -1200,7 +1207,7 @@ tr.alloc-open .row-title { font-weight: 600; }
 
 @media (max-width: 1000px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .dash-grid { grid-template-columns: 1fr; }
+  .dash-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 560px) {
   .kpi-grid { grid-template-columns: 1fr; }
@@ -1339,7 +1346,10 @@ tr.alloc-open .row-title { font-weight: 600; }
 .tl-icon.in { background: var(--green-soft); color: var(--green); }
 .tl-icon.out { background: var(--red-soft); color: var(--red); }
 .tl-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; }
-.tl-main strong { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* min-width: 0 é essencial: sem ele, este flex item com nowrap não encolhe
+   abaixo do texto completo e nomes longos esticam a página além do ecrã
+   (em mobile isso alarga o layout viewport e desposiciona a bottom-nav). */
+.tl-main strong { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tl-amounts { text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .tl-amounts span { display: block; font-size: 13px; font-weight: 600; }
 .tl-balance { font-size: 11.5px !important; color: var(--text-faint) !important; font-weight: 500 !important; }

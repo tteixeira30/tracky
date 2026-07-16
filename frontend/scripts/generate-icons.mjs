@@ -1,58 +1,77 @@
-// Gera os ícones PNG da PWA a partir do logo SVG (public/logo.svg).
+// Gera os ícones PNG da PWA e da app Android a partir do logo SVG (public/logo.svg).
 //
 // Uso:  node scripts/generate-icons.mjs   (a partir da pasta frontend/)
 //
-// Produz em public/:
-//   pwa-192x192.png            — ícone standard 192x192
+// Produz em public/ (PWA):
+//   pwa-192x192.png            — ícone standard 192x192 (cantos arredondados do SVG)
 //   pwa-512x512.png            — ícone standard 512x512
-//   pwa-maskable-512x512.png   — ícone maskable (logo com ~20% de padding
-//                                sobre fundo da cor de tema, para Android
-//                                poder recortar em círculo/squircle)
-//   apple-touch-icon.png       — 180x180 para iOS (ecrã inicial)
+//   pwa-maskable-512x512.png   — maskable: fundo índigo full-bleed com o glifo na
+//                                zona segura (Android recorta em círculo/squircle)
+//   apple-touch-icon.png       — 180x180 FULL-BLEED para iOS: sem cantos
+//                                transparentes (o iOS pinta-os de preto) — o
+//                                próprio iOS arredonda os cantos
+//
+// Produz em assets/ (fontes para `npx @capacitor/assets generate --android`):
+//   icon-only.png        — logo full-bleed 1024 (ícone clássico/legacy)
+//   icon-foreground.png  — SÓ o glifo branco em canvas transparente, dentro da
+//                          zona segura (~57%) do ícone adaptativo Android 8+
+//   icon-background.png  — fundo índigo 1024 (camada de trás do adaptativo)
 //
 // Requer o devDependency `sharp` (npm install -D sharp).
 
 import sharp from 'sharp'
-import { readFile } from 'node:fs/promises'
+import { readFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const publicDir = path.join(__dirname, '..', 'public')
+const assetsDir = path.join(__dirname, '..', 'assets')
 const logoPath = path.join(publicDir, 'logo.svg')
 
-// Cor de fundo do tema escuro — deve corresponder à var --bg em src/styles.css (:root).
-const THEME_BG = '#0b0d13'
+const svg = await readFile(logoPath, 'utf8')
 
-const svg = await readFile(logoPath)
+// Versão full-bleed: quadrado sem cantos arredondados (para plataformas que
+// aplicam a sua própria máscara — iOS, maskable, ícone adaptativo Android).
+const squareSvg = Buffer.from(svg.replaceAll('rx="15"', 'rx="0"'))
 
-// Ícones standard: o logo ocupa todo o canvas (o próprio SVG já tem cantos arredondados).
-async function standard(size, out) {
-  await sharp(svg, { density: 300 })
-    .resize(size, size)
-    .png()
-    .toFile(path.join(publicDir, out))
-  console.log(`✓ ${out} (${size}x${size})`)
-}
+// Só o glifo (linha do gráfico + área + ponto), branco sobre transparente,
+// centrado num canvas maior para respeitar a zona segura do ícone adaptativo
+// (o launcher recorta a parte exterior; o conteúdo deve ficar nos ~61% centrais).
+const glyphSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 112">
+  <g transform="translate(24 24)">
+    <path d="M13 45 L26 31 L34 38 L51 19 V47 H13 Z" fill="#ffffff" opacity="0.16"/>
+    <path d="M13 45 L26 31 L34 38 L51 19" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="51" cy="19" r="5" fill="#ffffff"/>
+  </g>
+</svg>`)
 
-// Ícone maskable: logo reduzido com ~20% de padding de cada lado,
-// centrado sobre um fundo opaco da cor de tema (zona segura do recorte Android).
-async function maskable(size, out) {
-  const pad = Math.round(size * 0.2)
-  const inner = size - pad * 2
-  const logo = await sharp(svg, { density: 300 }).resize(inner, inner).png().toBuffer()
-  await sharp({
-    create: { width: size, height: size, channels: 4, background: THEME_BG },
-  })
-    .composite([{ input: logo, left: pad, top: pad }])
-    .png()
-    .toFile(path.join(publicDir, out))
-  console.log(`✓ ${out} (${size}x${size}, maskable)`)
-}
+// Só o fundo (gradiente índigo, sem o glifo), quadrado full-bleed.
+const bgSvg = Buffer.from(
+  svg.replaceAll('rx="15"', 'rx="0"')
+     .replace(/<path[\s\S]*?\/>\s*<path[\s\S]*?\/>\s*<circle[\s\S]*?\/>/, ''),
+)
 
-await standard(192, 'pwa-192x192.png')
-await standard(512, 'pwa-512x512.png')
-await standard(180, 'apple-touch-icon.png')
-await maskable(512, 'pwa-maskable-512x512.png')
+const render = (input, size) => sharp(input, { density: 300 }).resize(size, size).png()
 
-console.log('Ícones gerados em', publicDir)
+// --- PWA (public/) ---
+await render(Buffer.from(svg), 192).toFile(path.join(publicDir, 'pwa-192x192.png'))
+await render(Buffer.from(svg), 512).toFile(path.join(publicDir, 'pwa-512x512.png'))
+await render(squareSvg, 180).toFile(path.join(publicDir, 'apple-touch-icon.png'))
+
+// Maskable: fundo índigo full-bleed + glifo na zona segura.
+const glyph512 = await render(glyphSvg, 512).toBuffer()
+await render(bgSvg, 512)
+  .composite([{ input: glyph512, left: 0, top: 0 }])
+  .toFile(path.join(publicDir, 'pwa-maskable-512x512.png'))
+
+console.log('✓ PWA: pwa-192x192, pwa-512x512, pwa-maskable-512x512, apple-touch-icon')
+
+// --- Android (assets/, consumido pelo @capacitor/assets) ---
+await mkdir(assetsDir, { recursive: true })
+await render(squareSvg, 1024).toFile(path.join(assetsDir, 'icon-only.png'))
+await render(glyphSvg, 1024).toFile(path.join(assetsDir, 'icon-foreground.png'))
+await render(bgSvg, 1024).toFile(path.join(assetsDir, 'icon-background.png'))
+
+console.log('✓ Android: icon-only, icon-foreground, icon-background em', assetsDir)
+console.log('  → agora corre: npx @capacitor/assets generate --android --assetPath assets')
