@@ -64,6 +64,22 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Objetivo criado')).toBeInTheDocument()
   })
 
+  it('converte o token {eur:...} dos insights para a moeda formatada', async () => {
+    api.getDashboard.mockResolvedValue({
+      ...data,
+      insights: [
+        { kind: 'positive', icon: 'trending', title: 'Rendimento a subir',
+          detail: 'Este mês ganhaste mais {eur:12.50} que em junho de 2026.' },
+      ],
+    })
+    render(<DashboardPage />)
+
+    // o token é substituído pelo valor formatado (fmtEur) — nunca aparece cru
+    await waitFor(() => expect(screen.getByText(/Este mês ganhaste mais/)).toBeInTheDocument())
+    expect(screen.queryByText(/\{eur:/)).not.toBeInTheDocument()
+    expect(screen.getByText(/12,50/)).toBeInTheDocument()
+  })
+
   it('mostra estados vazios de destaques e atividade', async () => {
     api.getDashboard.mockResolvedValue({ ...data, insights: [], recentActivity: [] })
     render(<DashboardPage />)

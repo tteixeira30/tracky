@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -56,11 +57,14 @@ public class GoalController {
     }
 
     @PostMapping("/{id}/contribute")
+    @Transactional
     public GoalDto contribute(@AuthenticationPrincipal User user, @PathVariable Long id,
                               @Valid @RequestBody ContributionRequest req) {
-        Goal g = repo.findByIdAndUserId(id, user.getId()).orElseThrow();
-        g.setSavedAmount(g.getSavedAmount().add(req.amount()).max(BigDecimal.ZERO));
-        return toDto(repo.save(g));
+        // valida posse (404 se não for do utilizador) e incrementa atomicamente, sem
+        // read-modify-write — dois depósitos concorrentes ao mesmo objetivo não se perdem
+        repo.findByIdAndUserId(id, user.getId()).orElseThrow();
+        repo.addToSavedAmount(id, user.getId(), req.amount());
+        return toDto(repo.findByIdAndUserId(id, user.getId()).orElseThrow());
     }
 
     @DeleteMapping("/{id}")

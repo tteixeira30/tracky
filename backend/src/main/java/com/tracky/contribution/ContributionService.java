@@ -71,10 +71,20 @@ public class ContributionService {
                 int months = monthsToApply(goal.getLastAppliedMonth(), force, goal.getContributionDay());
                 if (months <= 0) continue;
                 BigDecimal amount = goal.getMonthlyAllocation().multiply(BigDecimal.valueOf(months));
-                goal.setSavedAmount(goal.getSavedAmount().add(amount));
-                goal.setLastAppliedMonth(advance(goal.getLastAppliedMonth(), months));
-                goalRepository.save(goal);
-                applied.add(new AppliedItem("goal", goal.getName(), months, amount));
+                // não ultrapassar o alvo: capa o depósito ao que falta (0 se já concluído)
+                if (goal.getTargetAmount() != null) {
+                    BigDecimal saved = goal.getSavedAmount() == null ? BigDecimal.ZERO : goal.getSavedAmount();
+                    BigDecimal remaining = goal.getTargetAmount().subtract(saved).max(BigDecimal.ZERO);
+                    amount = amount.min(remaining);
+                }
+                String oldMonth = goal.getLastAppliedMonth();
+                String newMonth = advance(oldMonth, months);
+                // avanço atómico e condicional do marcador — evita dupla aplicação se
+                // o scheduler e um pedido concorrente correrem sobre a mesma linha
+                int updated = goalRepository.applyAutoDeposit(goal.getId(), amount, oldMonth, newMonth);
+                if (updated > 0 && amount.signum() > 0) {
+                    applied.add(new AppliedItem("goal", goal.getName(), months, amount));
+                }
             }
         }
 
@@ -84,7 +94,10 @@ public class ContributionService {
                 int months = monthsToApply(inv.getLastAppliedMonth(), force, inv.getContributionDay());
                 if (months <= 0) continue;
                 BigDecimal amount = inv.getMonthlyContribution().multiply(BigDecimal.valueOf(months));
+                String oldMonth = inv.getLastAppliedMonth();
+                String newMonth = advance(oldMonth, months);
 
+                int updated;
                 if (inv.getQuantity() != null && inv.getSymbol() != null) {
                     // compra de unidades ao preço atual; sem preço disponível fica pendente e tenta na próxima
                     Optional<BigDecimal> price = priceService.getPriceEur(inv.getSymbol(), inv.getType());
@@ -92,14 +105,14 @@ public class ContributionService {
                         log.warn("Reforço de {} adiado: sem preço para {}", inv.getName(), inv.getSymbol());
                         continue;
                     }
-                    inv.setQuantity(inv.getQuantity().add(amount.divide(price.get(), 8, RoundingMode.HALF_UP)));
+                    BigDecimal units = amount.divide(price.get(), 8, RoundingMode.HALF_UP);
+                    updated = investmentRepository.applyReinforcementUnits(inv.getId(), units, amount, oldMonth, newMonth);
                 } else {
-                    inv.setFallbackValue(inv.getFallbackValue().add(amount));
+                    updated = investmentRepository.applyReinforcementValue(inv.getId(), amount, oldMonth, newMonth);
                 }
-                inv.setInitialValue(inv.getInitialValue().add(amount));
-                inv.setLastAppliedMonth(advance(inv.getLastAppliedMonth(), months));
-                investmentRepository.save(inv);
-                applied.add(new AppliedItem("investment", inv.getName(), months, amount));
+                if (updated > 0) {
+                    applied.add(new AppliedItem("investment", inv.getName(), months, amount));
+                }
             }
         }
 
