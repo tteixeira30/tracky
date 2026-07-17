@@ -18,6 +18,29 @@ test.describe('objetivos', () => {
     await expect(page.locator('.goal-title', { hasText: 'Férias no Japão' })).toBeVisible()
   })
 
+  test('contribuir para um objetivo aumenta o poupado e o progresso', async ({ page }) => {
+    await registerViaUi(page)
+
+    await sidebarTab(page, 'Objetivos').click()
+    await page.getByRole('button', { name: 'Novo objetivo' }).click()
+    await page.getByPlaceholder('Ex: Fundo de emergência').fill('Fundo E2E')
+    await page.getByPlaceholder('Ex: 10000').fill('1000')
+    await page.getByPlaceholder('Ex: 300').fill('100')
+    await page.getByRole('dialog').getByRole('button', { name: 'Criar objetivo' }).click()
+
+    const card = page.locator('.goal-card', { has: page.locator('.goal-title', { hasText: 'Fundo E2E' }) })
+    await expect(card).toBeVisible()
+    // começa em 0%
+    await expect(card.locator('.of')).toContainText('0.0%')
+
+    // contribuir 200€ → 20% de 1000
+    await card.locator('.goal-contribute input').fill('200')
+    await card.getByRole('button', { name: 'Contribuir' }).click()
+
+    await expect(card.locator('.big')).toHaveText(/200,00\s*€/)
+    await expect(card.locator('.of')).toContainText('20.0%')
+  })
+
   test('eliminar um objetivo remove-o da lista', async ({ page }) => {
     await registerViaUi(page)
 
