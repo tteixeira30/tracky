@@ -315,12 +315,13 @@ public class IncomeController {
 
         List<AllocationDto> allocations = allocEntities.stream()
                 .map(a -> {
+                    BigDecimal pct = a.getPercentage() != null ? a.getPercentage() : BigDecimal.ZERO;
                     BigDecimal amount = a.getFixedAmount() != null
                             ? a.getFixedAmount()
-                            : income.multiply(a.getPercentage()).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                            : income.multiply(pct).divide(HUNDRED, 2, RoundingMode.HALF_UP);
                     BigDecimal effectivePct = income.signum() > 0
                             ? amount.multiply(HUNDRED).divide(income, 1, RoundingMode.HALF_UP)
-                            : a.getPercentage();
+                            : pct;
                     List<AllocationItemDto> items = allItems.stream()
                             .filter(it -> it.getAllocationId().equals(a.getId()))
                             .map(it -> new AllocationItemDto(it.getId(), it.getName(),

@@ -55,7 +55,8 @@ public class Goal {
     public void setTargetAmount(BigDecimal targetAmount) { this.targetAmount = targetAmount; }
     public BigDecimal getMonthlyAllocation() { return monthlyAllocation; }
     public void setMonthlyAllocation(BigDecimal monthlyAllocation) { this.monthlyAllocation = monthlyAllocation; }
-    public BigDecimal getSavedAmount() { return savedAmount; }
+    // linhas legadas (ddl-auto update) podem ter savedAmount a null → trata como 0
+    public BigDecimal getSavedAmount() { return savedAmount == null ? BigDecimal.ZERO : savedAmount; }
     public void setSavedAmount(BigDecimal savedAmount) { this.savedAmount = savedAmount; }
     public boolean isAutoDeposit() { return Boolean.TRUE.equals(autoDeposit); }
     public void setAutoDeposit(Boolean autoDeposit) { this.autoDeposit = autoDeposit; }

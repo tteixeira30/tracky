@@ -257,12 +257,15 @@ public class InvestmentController {
     private InvestmentDto enrich(Investment inv) {
         Optional<BigDecimal> price = priceService.getPriceEur(inv.getSymbol(), inv.getType());
         boolean live = price.isPresent() && inv.getQuantity() != null;
+        // linhas legadas podem ter fallbackValue/initialValue a null → trata como 0
+        BigDecimal fallback = inv.getFallbackValue() != null ? inv.getFallbackValue() : BigDecimal.ZERO;
+        BigDecimal initial = inv.getInitialValue() != null ? inv.getInitialValue() : BigDecimal.ZERO;
         BigDecimal currentValue = live
                 ? price.get().multiply(inv.getQuantity())
-                : inv.getFallbackValue();
-        BigDecimal gain = currentValue.subtract(inv.getInitialValue());
-        BigDecimal gainPct = inv.getInitialValue().signum() == 0 ? BigDecimal.ZERO
-                : gain.multiply(BigDecimal.valueOf(100)).divide(inv.getInitialValue(), 2, RoundingMode.HALF_UP);
+                : fallback;
+        BigDecimal gain = currentValue.subtract(initial);
+        BigDecimal gainPct = initial.signum() == 0 ? BigDecimal.ZERO
+                : gain.multiply(BigDecimal.valueOf(100)).divide(initial, 2, RoundingMode.HALF_UP);
         return new InvestmentDto(inv.getId(), inv.getName(), inv.getSymbol(), inv.getType(),
                 scale(inv.getInitialValue()), inv.getQuantity(), price.map(this::scale).orElse(null),
                 scale(currentValue), scale(gain), gainPct, live, inv.getMonthlyContribution(),

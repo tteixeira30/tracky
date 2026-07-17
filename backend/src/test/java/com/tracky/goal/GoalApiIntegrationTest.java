@@ -83,6 +83,31 @@ class GoalApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void contribuicaoNegativaNuncaDeixaOSaldoAbaixoDeZero() throws Exception {
+        String token = registerAndGetToken();
+
+        String created = mvc.perform(post("/api/goals")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Fundo","targetAmount":1000,"monthlyAllocation":100,"savedAmount":100}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Number id = JsonPath.read(created, "$.id");
+
+        // retirar mais do que existe → o UPDATE atómico limita a 0, nunca negativo
+        mvc.perform(post("/api/goals/" + id + "/contribute")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":-500}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.savedAmount").value(0.0));
+    }
+
+    @Test
     void objetivosDeUmUtilizadorNaoSaoVisiveisNemApagaveisPorOutro() throws Exception {
         String tokenA = registerAndGetToken();
         String tokenB = registerAndGetToken();

@@ -140,14 +140,15 @@ class GoalControllerTest {
     }
 
     @Test
-    void contribuicaoNegativaNuncaDeixaOSaldoAbaixoDeZero() {
+    void contribuirDelegaNoIncrementoAtomico() {
+        // o incremento é atómico (UPDATE condicional) para não perder depósitos
+        // concorrentes; o piso a zero vive no próprio UPDATE (ver teste de integração)
         Goal g = goal("1000", "100", "200");
-        when(repo.findByIdAndUserId(5L, 1L)).thenReturn(java.util.Optional.of(g));
-        when(repo.save(g)).thenReturn(g);
+        when(repo.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(g));
 
-        var dto = controller.contribute(user, 5L,
+        controller.contribute(user, 5L,
                 new GoalController.ContributionRequest(new BigDecimal("-500")));
 
-        assertThat(dto.savedAmount()).isEqualByComparingTo("0");
+        org.mockito.Mockito.verify(repo).addToSavedAmount(5L, 1L, new BigDecimal("-500"));
     }
 }
