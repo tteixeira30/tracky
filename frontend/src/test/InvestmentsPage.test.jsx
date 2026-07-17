@@ -32,7 +32,7 @@ const portfolio = (over = {}) => ({
 
 describe('InvestmentsPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     api.getPortfolioHistory.mockResolvedValue([])
     api.getProjection.mockResolvedValue(null)
   })
@@ -73,5 +73,61 @@ describe('InvestmentsPage', () => {
 
     await waitFor(() => expect(api.addInvestment).toHaveBeenCalledTimes(1))
     expect(api.addInvestment.mock.calls[0][0]).toMatchObject({ name: 'Cripto Fria' })
+  })
+
+  it('editar um investimento envia as alterações', async () => {
+    api.getInvestments.mockResolvedValue(portfolio())
+    api.updateInvestment.mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<InvestmentsPage />)
+
+    await waitFor(() => expect(screen.getByText('PPR Manual')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Editar'))
+
+    const dialog = screen.getByRole('dialog')
+    const nameInput = within(dialog).getAllByRole('textbox')[0]
+    await user.clear(nameInput)
+    await user.type(nameInput, 'PPR Renomeado')
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(api.updateInvestment).toHaveBeenCalledTimes(1))
+    expect(api.updateInvestment.mock.calls[0][1]).toMatchObject({ name: 'PPR Renomeado' })
+  })
+
+  it('eliminar um investimento confirma e chama a API', async () => {
+    api.getInvestments.mockResolvedValue(portfolio())
+    api.deleteInvestment.mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<InvestmentsPage />)
+
+    await waitFor(() => expect(screen.getByText('PPR Manual')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Eliminar'))
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Eliminar' }))
+
+    await waitFor(() => expect(api.deleteInvestment).toHaveBeenCalledWith(1))
+  })
+
+  it('atualizar cotações chama refreshInvestments', async () => {
+    api.getInvestments.mockResolvedValue(portfolio())
+    api.refreshInvestments.mockResolvedValue(portfolio())
+    const user = userEvent.setup()
+    render(<InvestmentsPage />)
+
+    await waitFor(() => expect(screen.getByText('PPR Manual')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Atualizar cotações'))
+
+    await waitFor(() => expect(api.refreshInvestments).toHaveBeenCalled())
+  })
+
+  it('simular reforço mensal chama applyDeposits para investimentos', async () => {
+    api.getInvestments.mockResolvedValue(portfolio())
+    api.applyDeposits.mockResolvedValue({ applied: [], totalAmount: 0 })
+    const user = userEvent.setup()
+    render(<InvestmentsPage />)
+
+    await waitFor(() => expect(screen.getByText('PPR Manual')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Simular reforço mensal/ }))
+
+    await waitFor(() => expect(api.applyDeposits).toHaveBeenCalledWith('investments'))
   })
 })

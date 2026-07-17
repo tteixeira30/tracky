@@ -30,7 +30,7 @@ const forecast = { startingBalance: 1000, hasBalance: true, days: 60, points: []
 
 describe('CalendarPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     api.getUpcoming.mockResolvedValue(forecast)
   })
 
@@ -82,5 +82,37 @@ describe('CalendarPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }))
 
     await waitFor(() => expect(api.setBalance).toHaveBeenCalledWith(3000))
+  })
+
+  it('editar um evento envia as alterações', async () => {
+    api.getCalendar.mockResolvedValue(monthData())
+    api.updateCalendarEvent.mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<CalendarPage />)
+
+    await waitFor(() => expect(screen.getByText('Renda')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Editar'))
+
+    const dialog = screen.getByRole('dialog')
+    const nameInput = within(dialog).getByPlaceholderText('Ex: Salário, Renda, Netflix')
+    await user.clear(nameInput)
+    await user.type(nameInput, 'Renda nova')
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(api.updateCalendarEvent).toHaveBeenCalledTimes(1))
+    expect(api.updateCalendarEvent.mock.calls[0][1]).toMatchObject({ name: 'Renda nova' })
+  })
+
+  it('eliminar um evento confirma e chama a API', async () => {
+    api.getCalendar.mockResolvedValue(monthData())
+    api.deleteCalendarEvent.mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<CalendarPage />)
+
+    await waitFor(() => expect(screen.getByText('Renda')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Eliminar'))
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Eliminar' }))
+
+    await waitFor(() => expect(api.deleteCalendarEvent).toHaveBeenCalledWith(1))
   })
 })

@@ -43,6 +43,35 @@ describe('DashboardPage', () => {
     expect(screen.getByText('1/2')).toBeInTheDocument() // objetivos concluídos/total
   })
 
+  it('mostra os destaques (insights) e a atividade recente', async () => {
+    api.getDashboard.mockResolvedValue({
+      ...data,
+      insights: [
+        { kind: 'positive', icon: 'trending', title: 'Portefólio a valorizar', detail: 'Está +10% acima.' },
+        { kind: 'info', icon: 'wallet', title: 'Rendimento por alocar', detail: 'Ainda 300 €.' },
+      ],
+      recentActivity: [
+        { type: 'investment', title: 'PPR Manual', subtitle: 'Investimento adicionado', at: '2025-06-01T10:00:00Z' },
+        { type: 'goal', title: 'Fundo', subtitle: 'Objetivo criado', at: '2025-06-02T10:00:00Z' },
+      ],
+    })
+    render(<DashboardPage />)
+
+    await waitFor(() => expect(screen.getByText('Portefólio a valorizar')).toBeInTheDocument())
+    expect(screen.getByText('Rendimento por alocar')).toBeInTheDocument()
+    expect(screen.getByText('PPR Manual')).toBeInTheDocument()
+    expect(screen.getByText('Investimento adicionado')).toBeInTheDocument()
+    expect(screen.getByText('Objetivo criado')).toBeInTheDocument()
+  })
+
+  it('mostra estados vazios de destaques e atividade', async () => {
+    api.getDashboard.mockResolvedValue({ ...data, insights: [], recentActivity: [] })
+    render(<DashboardPage />)
+
+    await waitFor(() => expect(screen.getByText(/Sem destaques por agora/)).toBeInTheDocument())
+    expect(screen.getByText('Ainda sem atividade registada.')).toBeInTheDocument()
+  })
+
   it('mostra estado de erro quando a API falha', async () => {
     api.getDashboard.mockRejectedValue(new Error('boom'))
     render(<DashboardPage />)

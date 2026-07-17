@@ -25,7 +25,7 @@ const goal = (over = {}) => ({
 })
 
 describe('GoalsPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => vi.resetAllMocks())
 
   it('mostra o esqueleto enquanto carrega', () => {
     api.getGoals.mockReturnValue(new Promise(() => {}))
@@ -87,5 +87,50 @@ describe('GoalsPage', () => {
     await user.click(within(card).getByRole('button', { name: /Contribuir/ }))
 
     await waitFor(() => expect(api.contributeGoal).toHaveBeenCalledWith(1, 200))
+  })
+
+  it('editar um objetivo envia as alterações', async () => {
+    api.getGoals.mockResolvedValue([goal()])
+    api.updateGoal.mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<GoalsPage />)
+
+    await waitFor(() => expect(screen.getByText('Fundo de emergência')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Editar'))
+
+    const dialog = screen.getByRole('dialog')
+    const nameInput = within(dialog).getAllByRole('textbox')[0]
+    await user.clear(nameInput)
+    await user.type(nameInput, 'Fundo maior')
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(api.updateGoal).toHaveBeenCalledTimes(1))
+    expect(api.updateGoal.mock.calls[0][1]).toMatchObject({ name: 'Fundo maior' })
+  })
+
+  it('eliminar um objetivo confirma e chama a API', async () => {
+    api.getGoals.mockResolvedValueOnce([goal()]).mockResolvedValueOnce([])
+    api.deleteGoal.mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<GoalsPage />)
+
+    await waitFor(() => expect(screen.getByText('Fundo de emergência')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Eliminar'))
+    // ConfirmDialog (role alertdialog) — o botão de confirmar
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Eliminar' }))
+
+    await waitFor(() => expect(api.deleteGoal).toHaveBeenCalledWith(1))
+  })
+
+  it('simular depósito mensal chama applyDeposits para objetivos', async () => {
+    api.getGoals.mockResolvedValue([goal({ autoDeposit: true })])
+    api.applyDeposits.mockResolvedValue({ applied: [{ name: 'Fundo de emergência' }], totalAmount: 100 })
+    const user = userEvent.setup()
+    render(<GoalsPage />)
+
+    await waitFor(() => expect(screen.getByText('Fundo de emergência')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Simular depósito mensal/ }))
+
+    await waitFor(() => expect(api.applyDeposits).toHaveBeenCalledWith('goals'))
   })
 })
