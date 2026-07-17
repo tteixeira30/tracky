@@ -1,0 +1,7 @@
+# Artefactos do Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Config de override local (aponta ao Chromium do ambiente; não versionar)
+playwright.local.config.js
