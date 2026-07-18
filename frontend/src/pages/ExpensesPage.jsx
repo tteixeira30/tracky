@@ -59,6 +59,7 @@ export default function ExpensesPage() {
   const [txModal, setTxModal] = useState(false)
   const [editingTx, setEditingTx] = useState(null)
   const [txForm, setTxForm] = useState(EMPTY_TX)
+  const [txApplyAll, setTxApplyAll] = useState(true)
   const [txToDelete, setTxToDelete] = useState(null)
 
   // importação de extrato
@@ -67,6 +68,7 @@ export default function ExpensesPage() {
   const [importAccountId, setImportAccountId] = useState('')
   const [importFile, setImportFile] = useState(null) // { name, analysis }
   const [mapping, setMapping] = useState(null)
+  const [categoryRules, setCategoryRules] = useState(null) // { matchKey: category }
 
   const load = () =>
     api.getExpenses(month, accountFilter || null).then(setData)
@@ -126,6 +128,7 @@ export default function ExpensesPage() {
   }
   const openTxEdit = (t) => {
     setEditingTx(t)
+    setTxApplyAll(true)
     setTxForm({
       accountId: String(t.accountId), date: t.date, description: t.description,
       amount: String(fromEur(t.amount)), inflow: t.inflow, category: t.category,
@@ -138,6 +141,7 @@ export default function ExpensesPage() {
     if (!txForm.description.trim() || !txForm.amount || !txForm.date) {
       toast.error('Campos em falta', 'Indica a data, a descrição e o valor.'); return
     }
+    const applySimilar = !!editingTx && txApplyAll && txForm.category !== editingTx.category
     const payload = {
       accountId: Number(txForm.accountId),
       date: txForm.date,
@@ -145,6 +149,7 @@ export default function ExpensesPage() {
       amount: toEur(Number(txForm.amount)),
       inflow: txForm.inflow,
       category: txForm.category,
+      applyToSimilar: applySimilar,
     }
     setBusy(true)
     try {
@@ -152,7 +157,10 @@ export default function ExpensesPage() {
       else await api.addTransaction(payload)
       setTxModal(false)
       await load()
-      toast.success(editingTx ? 'Movimento atualizado' : 'Movimento adicionado', `"${payload.description}" guardado.`)
+      toast.success(editingTx ? 'Movimento atualizado' : 'Movimento adicionado',
+        applySimilar
+          ? `Categoria "${catLabel(txForm.category)}" aplicada a todos os movimentos iguais e memorizada para futuras importações.`
+          : `"${payload.description}" guardado.`)
     } catch (e) { toast.error('Erro ao guardar', e.message) }
     finally { setBusy(false) }
   }
@@ -175,6 +183,10 @@ export default function ExpensesPage() {
     setImportFile(null)
     setMapping(null)
     setImportModal(true)
+    // regras aprendidas, para a pré-visualização mostrar as categorias finais
+    api.getCategoryRules()
+      .then((list) => setCategoryRules(Object.fromEntries(list.map((r) => [r.matchKey, r.category]))))
+      .catch(() => setCategoryRules(null))
   }
 
   const onFile = async (e) => {
@@ -208,8 +220,15 @@ export default function ExpensesPage() {
   const preview = useMemo(() => {
     if (!importFile || !mapping) return null
     if (mapping.date === -1 || mapping.description === -1 || (mapping.amount === -1 && mapping.debit === -1)) return null
-    return buildTransactions(importFile.analysis.dataRows, mapping, importFile.analysis.dateHint)
-  }, [importFile, mapping])
+    const result = buildTransactions(importFile.analysis.dataRows, mapping, importFile.analysis.dateHint)
+    if (categoryRules) {
+      for (const r of result.rows) {
+        const ruled = categoryRules[r.description.trim().toLowerCase().replace(/\s+/g, ' ')]
+        if (ruled) r.category = ruled
+      }
+    }
+    return result
+  }, [importFile, mapping, categoryRules])
 
   const doImport = async () => {
     if (!importAccountId) { toast.error('Conta em falta', 'Escolhe a conta a que pertence o extrato.'); return }
@@ -495,6 +514,12 @@ export default function ExpensesPage() {
             <label>Data</label>
             <DatePicker value={txForm.date} onChange={(iso) => setTxForm({ ...txForm, date: iso })} />
           </div>
+          {editingTx && (
+            <label className="field full check-row">
+              <input type="checkbox" checked={txApplyAll} onChange={(e) => setTxApplyAll(e.target.checked)} />
+              <span>Ao mudar a categoria, aplicar a <strong>todos os movimentos com esta descrição</strong> e memorizar para futuras importações</span>
+            </label>
+          )}
         </div>
       </Modal>
 

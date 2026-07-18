@@ -105,6 +105,7 @@ export const api = {
   updateTransaction: (id, data) => request(`/expenses/transactions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTransaction: (id) => request(`/expenses/transactions/${id}`, { method: 'DELETE' }),
   importTransactions: (data) => request('/expenses/import', { method: 'POST', body: JSON.stringify(data) }),
+  getCategoryRules: () => request('/expenses/rules'),
 }
 
 // ---------- Modo privacidade ----------

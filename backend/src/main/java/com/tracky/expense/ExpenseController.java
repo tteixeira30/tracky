@@ -30,17 +30,23 @@ public class ExpenseController {
 
     private final AccountRepository accounts;
     private final TransactionRepository transactions;
+    private final CategoryRuleRepository rules;
 
-    public ExpenseController(AccountRepository accounts, TransactionRepository transactions) {
+    public ExpenseController(AccountRepository accounts, TransactionRepository transactions,
+                             CategoryRuleRepository rules) {
         this.accounts = accounts;
         this.transactions = transactions;
+        this.rules = rules;
     }
 
     /** currentBalance opcional, em EUR; null = limpar/não definido. */
     public record AccountRequest(@NotBlank String name, BigDecimal currentBalance) {}
     public record AccountDto(Long id, String name, long transactionCount, BigDecimal currentBalance) {}
+    /** applyToSimilar: aplica a categoria a todos os movimentos com a mesma descrição e memoriza como regra. */
     public record TransactionRequest(@NotNull Long accountId, @NotNull LocalDate date, @NotBlank String description,
-                                     @NotNull @Positive BigDecimal amount, boolean inflow, String category) {}
+                                     @NotNull @Positive BigDecimal amount, boolean inflow, String category,
+                                     Boolean applyToSimilar) {}
+    public record RuleDto(Long id, String matchKey, String category) {}
     public record TransactionDto(Long id, Long accountId, String accountName, LocalDate date, String description,
                                  BigDecimal amount, boolean inflow, String category) {}
     public record ImportRow(@NotNull LocalDate date, @NotBlank String description,
@@ -128,7 +134,9 @@ public class ExpenseController {
         t.setUserId(user.getId());
         t.setAccountId(a.getId());
         apply(t, req);
-        return toDto(transactions.save(t), Map.of(a.getId(), a.getName()));
+        TransactionDto dto = toDto(transactions.save(t), Map.of(a.getId(), a.getName()));
+        if (Boolean.TRUE.equals(req.applyToSimilar())) applyCategoryRule(user, t.getDescription(), t.getCategory());
+        return dto;
     }
 
     @PutMapping("/transactions/{id}")
@@ -138,7 +146,46 @@ public class ExpenseController {
         Account a = requireAccount(user, req.accountId());
         t.setAccountId(a.getId());
         apply(t, req);
-        return toDto(transactions.save(t), Map.of(a.getId(), a.getName()));
+        TransactionDto dto = toDto(transactions.save(t), Map.of(a.getId(), a.getName()));
+        if (Boolean.TRUE.equals(req.applyToSimilar())) applyCategoryRule(user, t.getDescription(), t.getCategory());
+        return dto;
+    }
+
+    // ---------- Regras de categorização ----------
+
+    @GetMapping("/rules")
+    public List<RuleDto> listRules(@AuthenticationPrincipal User user) {
+        return rules.findByUserIdOrderByIdAsc(user.getId()).stream()
+                .map(r -> new RuleDto(r.getId(), r.getMatchKey(), r.getCategory().name())).toList();
+    }
+
+    @DeleteMapping("/rules/{id}")
+    public void deleteRule(@AuthenticationPrincipal User user, @PathVariable Long id) {
+        rules.findByIdAndUserId(id, user.getId()).ifPresent(rules::delete);
+    }
+
+    /**
+     * Memoriza a regra descrição→categoria e propaga a categoria a todos os
+     * movimentos do utilizador com a mesma descrição normalizada.
+     */
+    private void applyCategoryRule(User user, String description, Transaction.Category category) {
+        String key = normalizeDesc(description);
+        if (key.isEmpty()) return;
+
+        CategoryRule rule = rules.findByUserIdAndMatchKey(user.getId(), key).orElseGet(() -> {
+            CategoryRule r = new CategoryRule();
+            r.setUserId(user.getId());
+            r.setMatchKey(key);
+            return r;
+        });
+        rule.setCategory(category);
+        rules.save(rule);
+
+        List<Transaction> toUpdate = transactions.findByUserId(user.getId()).stream()
+                .filter(t -> key.equals(normalizeDesc(t.getDescription())) && t.getCategory() != category)
+                .peek(t -> t.setCategory(category))
+                .toList();
+        transactions.saveAll(toUpdate);
     }
 
     @DeleteMapping("/transactions/{id}")
@@ -165,6 +212,10 @@ public class ExpenseController {
             existing.merge(dedupeKey(t.getTxDate(), t.getAmount(), t.isInflow(), t.getDescription()), 1, Integer::sum);
         }
 
+        // regras de categorização aprendidas têm prioridade sobre a categoria vinda do frontend
+        Map<String, Transaction.Category> ruleMap = new HashMap<>();
+        for (CategoryRule r : rules.findByUserIdOrderByIdAsc(user.getId())) ruleMap.put(r.getMatchKey(), r.getCategory());
+
         int imported = 0, skipped = 0;
         List<Transaction> batch = new ArrayList<>();
         for (ImportRow row : req.rows()) {
@@ -182,7 +233,8 @@ public class ExpenseController {
             t.setDescription(truncate(row.description().trim()));
             t.setAmount(row.amount().setScale(2, RoundingMode.HALF_UP));
             t.setInflow(row.inflow());
-            t.setCategory(parseCategory(row.category()));
+            Transaction.Category ruled = ruleMap.get(normalizeDesc(row.description()));
+            t.setCategory(ruled != null ? ruled : parseCategory(row.category()));
             batch.add(t);
             imported++;
         }
@@ -227,9 +279,13 @@ public class ExpenseController {
         return s.length() > 500 ? s.substring(0, 500) : s;
     }
 
+    /** Normalização de descrições para comparação (dedupe e regras de categoria). */
+    private static String normalizeDesc(String description) {
+        return description == null ? "" : description.trim().toLowerCase().replaceAll("\\s+", " ");
+    }
+
     private static String dedupeKey(LocalDate date, BigDecimal amount, boolean inflow, String description) {
-        String desc = description == null ? "" : description.trim().toLowerCase().replaceAll("\\s+", " ");
-        return date + "|" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + "|" + inflow + "|" + desc;
+        return date + "|" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + "|" + inflow + "|" + normalizeDesc(description);
     }
 
     /** Arredonda o saldo a 2 casas decimais; null passa (saldo "não definido"). */

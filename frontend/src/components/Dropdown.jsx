@@ -1,41 +1,63 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { IconChevronRight } from './Icons'
 
-const POP_MAX = 300   // altura máxima do menu (chega para as 8 moedas sem scroll interno)
+const POP_MAX = 300   // altura máxima do menu
+const POP_MIN_W = 140 // largura mínima (triggers estreitos, ex.: seletor de moeda)
 
-/** Dropdown com o visual da app (substitui o <select> nativo). */
+/**
+ * Dropdown com o visual da app (substitui o <select> nativo).
+ * O menu é renderizado num portal com posição fixa, para nunca ficar cortado
+ * por contentores com overflow (ex.: corpo de modais com scroll).
+ */
 export default function Dropdown({ value, onChange, options = [], placeholder = 'Seleciona…' }) {
   const [open, setOpen] = useState(false)
-  const [dropUp, setDropUp] = useState(false)
-  const [maxH, setMaxH] = useState(POP_MAX)
+  const [pos, setPos] = useState(null)
   const ref = useRef(null)
+  const popRef = useRef(null)
+
+  const place = () => {
+    if (!ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    const below = window.innerHeight - rect.bottom - 8
+    const above = rect.top - 8
+    const up = below < Math.min(POP_MAX, above)
+    const width = Math.max(rect.width, POP_MIN_W)
+    setPos({
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+      width,
+      maxHeight: Math.max(140, Math.min(POP_MAX, up ? above : below)),
+      top: up ? undefined : rect.bottom + 6,
+      bottom: up ? window.innerHeight - rect.top + 6 : undefined,
+    })
+  }
 
   useEffect(() => {
     if (!open) return
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDown = (e) => {
+      if (ref.current?.contains(e.target) || popRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
     const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    // reposiciona se algo fizer scroll (ex.: corpo do modal) ou a janela mudar de tamanho
+    const onMove = () => place()
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onMove, true)
+    window.addEventListener('resize', onMove)
     return () => {
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onMove, true)
+      window.removeEventListener('resize', onMove)
     }
   }, [open])
 
   const selected = options.find((o) => o.value === value)
 
-  // decide abrir para cima/baixo consoante o espaço disponível (evita cortar opções
-  // quando o dropdown está no fundo do ecrã, ex: seletor de moeda na barra lateral)
   const toggle = () => {
     setOpen((wasOpen) => {
-      if (!wasOpen && ref.current) {
-        const rect = ref.current.getBoundingClientRect()
-        const below = window.innerHeight - rect.bottom - 8
-        const above = rect.top - 8
-        const up = below < Math.min(POP_MAX, above)
-        setDropUp(up)
-        setMaxH(Math.max(140, Math.min(POP_MAX, up ? above : below)))
-      }
+      if (!wasOpen) place()
       return !wasOpen
     })
   }
@@ -46,14 +68,15 @@ export default function Dropdown({ value, onChange, options = [], placeholder = 
   }
 
   return (
-    <div className={`dropdown ${open ? 'open' : ''} ${dropUp ? 'up' : ''}`} ref={ref}>
+    <div className={`dropdown ${open ? 'open' : ''}`} ref={ref}>
       <button type="button" className="dd-trigger" onClick={toggle} aria-expanded={open} aria-haspopup="listbox">
         <span className={selected ? '' : 'dd-placeholder'}>{selected ? selected.label : placeholder}</span>
         <IconChevronRight size={16} className="dd-chevron" />
       </button>
 
-      {open && (
-        <div className="dd-pop" role="listbox" style={{ maxHeight: maxH }}>
+      {open && pos && createPortal(
+        <div className="dd-pop" role="listbox" ref={popRef}
+             style={{ position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.width, maxHeight: pos.maxHeight }}>
           {options.map((o) => (
             <button key={o.value} type="button" role="option" aria-selected={o.value === value}
                     className={`dd-option ${o.value === value ? 'selected' : ''}`}
@@ -61,7 +84,8 @@ export default function Dropdown({ value, onChange, options = [], placeholder = 
               {o.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
