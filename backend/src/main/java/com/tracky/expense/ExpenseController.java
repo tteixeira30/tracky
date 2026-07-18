@@ -36,8 +36,9 @@ public class ExpenseController {
         this.transactions = transactions;
     }
 
-    public record AccountRequest(@NotBlank String name) {}
-    public record AccountDto(Long id, String name, long transactionCount) {}
+    /** currentBalance opcional, em EUR; null = limpar/não definido. */
+    public record AccountRequest(@NotBlank String name, BigDecimal currentBalance) {}
+    public record AccountDto(Long id, String name, long transactionCount, BigDecimal currentBalance) {}
     public record TransactionRequest(@NotNull Long accountId, @NotNull LocalDate date, @NotBlank String description,
                                      @NotNull @Positive BigDecimal amount, boolean inflow, String category) {}
     public record TransactionDto(Long id, Long accountId, String accountName, LocalDate date, String description,
@@ -63,6 +64,7 @@ public class ExpenseController {
         Account a = new Account();
         a.setUserId(user.getId());
         a.setName(req.name().trim());
+        a.setCurrentBalance(roundBalance(req.currentBalance()));
         return toDto(user, accounts.save(a));
     }
 
@@ -71,6 +73,7 @@ public class ExpenseController {
                                     @Valid @RequestBody AccountRequest req) {
         Account a = accounts.findByIdAndUserId(id, user.getId()).orElseThrow();
         a.setName(req.name().trim());
+        a.setCurrentBalance(roundBalance(req.currentBalance()));
         return toDto(user, accounts.save(a));
     }
 
@@ -229,8 +232,14 @@ public class ExpenseController {
         return date + "|" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + "|" + inflow + "|" + desc;
     }
 
+    /** Arredonda o saldo a 2 casas decimais; null passa (saldo "não definido"). */
+    private static BigDecimal roundBalance(BigDecimal balance) {
+        return balance == null ? null : balance.setScale(2, RoundingMode.HALF_UP);
+    }
+
     private AccountDto toDto(User user, Account a) {
-        return new AccountDto(a.getId(), a.getName(), transactions.countByUserIdAndAccountId(user.getId(), a.getId()));
+        return new AccountDto(a.getId(), a.getName(), transactions.countByUserIdAndAccountId(user.getId(), a.getId()),
+                a.getCurrentBalance());
     }
 
     private static TransactionDto toDto(Transaction t, Map<Long, String> accountNames) {

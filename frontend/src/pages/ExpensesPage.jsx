@@ -54,6 +54,7 @@ export default function ExpensesPage() {
   const [accountModal, setAccountModal] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [accountName, setAccountName] = useState('')
+  const [accountBalance, setAccountBalance] = useState('')
   const [accountToDelete, setAccountToDelete] = useState(null)
   const [txModal, setTxModal] = useState(false)
   const [editingTx, setEditingTx] = useState(null)
@@ -76,15 +77,27 @@ export default function ExpensesPage() {
 
   // ---------- contas ----------
 
-  const openAccountAdd = () => { setEditingAccount(null); setAccountName(''); setAccountModal(true) }
-  const openAccountEdit = (a) => { setEditingAccount(a); setAccountName(a.name); setAccountModal(true) }
+  const openAccountAdd = () => { setEditingAccount(null); setAccountName(''); setAccountBalance(''); setAccountModal(true) }
+  const openAccountEdit = (a) => {
+    setEditingAccount(a)
+    setAccountName(a.name)
+    setAccountBalance(a.currentBalance != null ? String(fromEur(a.currentBalance)) : '')
+    setAccountModal(true)
+  }
 
   const saveAccount = async () => {
     if (!accountName.trim()) { toast.error('Nome em falta', 'Indica o nome da conta.'); return }
+    if (accountBalance !== '' && !Number.isFinite(Number(accountBalance))) {
+      toast.error('Saldo inválido', 'Indica um número válido (ou deixa em branco).'); return
+    }
+    const payload = {
+      name: accountName.trim(),
+      currentBalance: accountBalance === '' ? null : toEur(Number(accountBalance)),
+    }
     setBusy(true)
     try {
-      if (editingAccount) await api.updateExpenseAccount(editingAccount.id, { name: accountName.trim() })
-      else await api.addExpenseAccount({ name: accountName.trim() })
+      if (editingAccount) await api.updateExpenseAccount(editingAccount.id, payload)
+      else await api.addExpenseAccount(payload)
       setAccountModal(false)
       await load()
       toast.success(editingAccount ? 'Conta atualizada' : 'Conta criada', `"${accountName.trim()}" guardada.`)
@@ -229,6 +242,13 @@ export default function ExpensesPage() {
   const hasAccounts = data.accounts.length > 0
   const totalOut = Number(data.outflows) || 0
 
+  // saldo atual: da conta filtrada, ou a soma das contas com saldo definido
+  const selectedAccount = accountFilter ? data.accounts.find((a) => String(a.id) === accountFilter) : null
+  const balancesDefined = data.accounts.filter((a) => a.currentBalance != null)
+  const balanceValue = selectedAccount
+    ? selectedAccount.currentBalance
+    : (balancesDefined.length > 0 ? balancesDefined.reduce((s, a) => s + Number(a.currentBalance), 0) : null)
+
   // agrupar movimentos por dia
   const byDay = []
   for (const t of data.transactions) {
@@ -269,6 +289,7 @@ export default function ExpensesPage() {
               <button key={a.id} className={`account-chip ${accountFilter === String(a.id) ? 'active' : ''}`}
                       onClick={() => setAccountFilter(String(a.id))}>
                 <IconBank size={13} /> {a.name}
+                {a.currentBalance != null && <span className="account-chip-balance">{fmtEur(a.currentBalance)}</span>}
                 <span className="account-chip-actions">
                   <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); openAccountEdit(a) }} aria-label={`Editar ${a.name}`}><IconPencil size={12} /></span>
                   <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); setAccountToDelete(a) }} aria-label={`Eliminar ${a.name}`}>✕</span>
@@ -303,10 +324,16 @@ export default function ExpensesPage() {
           </div>
           <div className="card kpi-card">
             <div className="kpi-top">
-              <span className="kpi-icon"><IconReceipt size={17} /></span>
-              <span className="kpi-label">Movimentos</span>
+              <span className="kpi-icon"><IconBank size={17} /></span>
+              <span className="kpi-label">{selectedAccount ? 'Saldo da conta' : 'Saldo em contas'}</span>
             </div>
-            <div className="kpi-value">{data.transactions.length}</div>
+            <div className="kpi-value">{balanceValue != null ? fmtEur(balanceValue) : '—'}</div>
+            <div className="kpi-sub">
+              {balanceValue != null
+                ? (selectedAccount ? 'Registado por ti' : `${balancesDefined.length} de ${data.accounts.length} conta(s) com saldo`)
+                : 'Define o saldo ao editar a conta'}
+              {' '}· {data.transactions.length} movimento(s)
+            </div>
           </div>
         </div>
       </div>
@@ -405,10 +432,20 @@ export default function ExpensesPage() {
                  <button className="btn" onClick={saveAccount} disabled={busy}>{busy ? 'A guardar…' : 'Guardar'}</button>
                </>
              }>
-        <div className="field full">
-          <label>Nome da conta</label>
-          <input placeholder="Ex: Santander" autoFocus value={accountName}
-                 onChange={(e) => setAccountName(e.target.value)} />
+        <div className="form-grid">
+          <div className="field full">
+            <label>Nome da conta</label>
+            <input placeholder="Ex: Santander" autoFocus value={accountName}
+                   onChange={(e) => setAccountName(e.target.value)} />
+          </div>
+          <div className="field full">
+            <label>Saldo atual (opcional)</label>
+            <div className="input-affix">
+              <input type="number" step="0.01" placeholder="Deixa em branco se não quiseres registar" value={accountBalance}
+                     onChange={(e) => setAccountBalance(e.target.value)} />
+              <span className="affix">{cur}</span>
+            </div>
+          </div>
         </div>
       </Modal>
 
@@ -520,12 +557,24 @@ export default function ExpensesPage() {
               </div>
             )}
 
-            {preview && preview.rows.length > 0 && (
+            {preview && preview.rows.length > 0 && (() => {
+              let minDate = preview.rows[0].date, maxDate = preview.rows[0].date
+              for (const r of preview.rows) {
+                if (r.date < minDate) minDate = r.date
+                if (r.date > maxDate) maxDate = r.date
+              }
+              const months = (Number(maxDate.slice(0, 4)) - Number(minDate.slice(0, 4))) * 12
+                + Number(maxDate.slice(5, 7)) - Number(minDate.slice(5, 7)) + 1
+              const fmtD = (iso) => new Date(iso).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' })
+              return (
               <div className="import-preview">
                 <div className="import-summary">
                   <span>{preview.rows.length} movimento(s) prontos a importar</span>
                   {preview.ignored > 0 && <span className="dim">{preview.ignored} linha(s) ignoradas</span>}
                 </div>
+                <p className="dim import-range">
+                  Período: {fmtD(minDate)} a {fmtD(maxDate)}{months > 1 ? ` · ${months} meses` : ''}
+                </p>
                 <ul className="event-list">
                   {preview.rows.slice(0, 8).map((r, i) => (
                     <li key={i} className="event-row">
@@ -542,7 +591,8 @@ export default function ExpensesPage() {
                 </ul>
                 {preview.rows.length > 8 && <p className="dim" style={{ margin: '6px 2px 0' }}>… e mais {preview.rows.length - 8} movimento(s).</p>}
               </div>
-            )}
+              )
+            })()}
             {preview && preview.rows.length === 0 && (
               <p className="dim" style={{ margin: '10px 2px' }}>Nenhum movimento válido encontrado — verifica o mapeamento das colunas.</p>
             )}

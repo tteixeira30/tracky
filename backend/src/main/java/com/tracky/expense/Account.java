@@ -7,6 +7,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
@@ -26,6 +27,10 @@ public class Account {
 
     private String name;
 
+    /** Saldo atual da conta em EUR; null significa "não definido". */
+    @Column(precision = 19, scale = 2)
+    private BigDecimal currentBalance;
+
     private Instant createdAt = Instant.now();
 
     public Long getId() { return id; }
@@ -33,5 +38,7 @@ public class Account {
     public void setUserId(Long userId) { this.userId = userId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public BigDecimal getCurrentBalance() { return currentBalance; }
+    public void setCurrentBalance(BigDecimal currentBalance) { this.currentBalance = currentBalance; }
     public Instant getCreatedAt() { return createdAt; }
 }
