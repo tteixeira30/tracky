@@ -2,6 +2,8 @@ package com.tracky.achievements;
 
 import com.tracky.auth.User;
 import com.tracky.calendar.CalendarEventRepository;
+import com.tracky.expense.Account;
+import com.tracky.expense.AccountRepository;
 import com.tracky.goal.GoalController;
 import com.tracky.income.IncomeController;
 import com.tracky.investment.Investment;
@@ -29,6 +31,7 @@ class AchievementsControllerTest {
     @Mock InvestmentController investmentController;
     @Mock GoalController goalController;
     @Mock CalendarEventRepository calendarRepo;
+    @Mock AccountRepository accountRepo;
 
     AchievementsController controller;
     User user;
@@ -36,9 +39,19 @@ class AchievementsControllerTest {
     @BeforeEach
     void setUp() {
         controller = new AchievementsController(incomeController, investmentController,
-                goalController, calendarRepo);
+                goalController, calendarRepo, accountRepo);
         user = mock(User.class);
         lenient().when(user.getId()).thenReturn(1L);
+        lenient().when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
+    }
+
+    /** Conta com saldo definido (para a conquista "Prevê o futuro"). */
+    private Account accountWithBalance(String balance) {
+        Account a = new Account();
+        a.setUserId(1L);
+        a.setName("Conta");
+        a.setCurrentBalance(balance == null ? null : new BigDecimal(balance));
+        return a;
     }
 
     private InvestmentController.InvestmentDto investment(Investment.Type type, String value,
@@ -77,7 +90,6 @@ class AchievementsControllerTest {
         when(goalController.list(user)).thenReturn(List.of());
         stubIncome(List.of(), "0", null);
         when(calendarRepo.countByUserId(1L)).thenReturn(0L);
-        when(user.getCurrentBalance()).thenReturn(null);
 
         var resp = controller.get(user);
 
@@ -98,7 +110,6 @@ class AchievementsControllerTest {
         when(goalController.list(user)).thenReturn(List.of());
         stubIncome(List.of(), "0", null);
         when(calendarRepo.countByUserId(1L)).thenReturn(0L);
-        when(user.getCurrentBalance()).thenReturn(null);
 
         var resp = controller.get(user);
         var byId = resp.achievements().stream()
@@ -125,7 +136,7 @@ class AchievementsControllerTest {
                 goal("5000", "2500", "50", false)));
         stubIncome(List.of("2024-11", "2024-12", "2025-01"), "2000", "100");
         when(calendarRepo.countByUserId(1L)).thenReturn(2L);
-        when(user.getCurrentBalance()).thenReturn(new BigDecimal("1500"));
+        when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(accountWithBalance("1500")));
 
         var resp = controller.get(user);
         var byId = resp.achievements().stream()
@@ -150,7 +161,6 @@ class AchievementsControllerTest {
         when(goalController.list(user)).thenReturn(List.of());
         stubIncome(List.of("2025-01"), "1000", "50");
         when(calendarRepo.countByUserId(1L)).thenReturn(0L);
-        when(user.getCurrentBalance()).thenReturn(null);
 
         var resp = controller.get(user);
 
