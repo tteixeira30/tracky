@@ -129,6 +129,31 @@ export function autoCategory(description, inflow) {
 
 export const HEADER_HINTS = /data|date|descri|description|montante|amount|valor|d[eé]bito|debit|cr[eé]dito|credit|movimento|saldo|balance|currency|moeda/i
 
+const OPENING_BALANCE_LABEL = /saldo\s*(anterior|inicial|de\s*abertura)|opening\s*balance/i
+
+/**
+ * Procura o saldo inicial do extrato (linha "Saldo anterior"/"Saldo inicial"),
+ * usado para determinar o sentido do primeiro movimento em extratos sem sinais.
+ * Devolve o valor numérico ou null se não existir.
+ */
+export function findOpeningBalance(rows) {
+  if (!rows) return null
+  for (const r of rows) {
+    const idx = r.findIndex((c) => OPENING_BALANCE_LABEL.test(String(c)))
+    if (idx === -1) continue
+    // valor noutra célula numérica da mesma linha (o rótulo e o valor costumam estar separados)
+    for (let k = r.length - 1; k >= 0; k--) {
+      if (k === idx) continue
+      const v = parseAmount(r[k])
+      if (v != null) return v
+    }
+    // ou um número no fim da própria célula do rótulo ("Saldo anterior: 1.000,00 €")
+    const m = String(r[idx]).match(/(-?\(?[\d.,]+\)?)\s*€?\s*$/)
+    if (m) { const v = parseAmount(m[1]); if (v != null) return v }
+  }
+  return null
+}
+
 // Categorias de colunas usadas para reconhecer a linha de cabeçalho de uma tabela de movimentos.
 const HEADER_CATEGORIES = [
   /data|date|\bmov\b/i,
@@ -182,8 +207,10 @@ export function analyzeRows(rows) {
     }
   }
 
+  const openingBalance = findOpeningBalance(rows)
+
   const headerIdx = findHeaderIndex(rows)
-  if (headerIdx === -1) return { format: 'unknown', headers: rows[0], dataRows: rows.slice(1), mapping: emptyMapping(), dateHint }
+  if (headerIdx === -1) return { format: 'unknown', headers: rows[0], dataRows: rows.slice(1), mapping: emptyMapping(), dateHint, openingBalance }
 
   const headers = rows[headerIdx].map((h) => h.trim())
   const dataRows = rows.slice(headerIdx + 1)
@@ -222,7 +249,7 @@ export function analyzeRows(rows) {
   if (mapping.date === -1 || mapping.description === -1 || (mapping.amount === -1 && mapping.debit === -1)) {
     format = 'unknown'
   }
-  return { format, headers, dataRows, mapping, dateHint }
+  return { format, headers, dataRows, mapping, dateHint, openingBalance }
 }
 
 /**
@@ -296,7 +323,7 @@ function emptyMapping() {
  * Constrói as transações a importar a partir das linhas de dados e do mapeamento.
  * Devolve { rows: [{date, description, amount, inflow, category}], ignored }.
  */
-export function buildTransactions(dataRows, mapping, dateHint) {
+export function buildTransactions(dataRows, mapping, dateHint, openingBalance = null) {
   const out = []
   let ignored = 0
   for (const cells of dataRows) {
@@ -336,8 +363,8 @@ export function buildTransactions(dataRows, mapping, dateHint) {
   }
 
   // Extratos sem sinal no montante (comum em PDF): infere entrada/saída pela evolução do saldo.
-  if (mapping.amount !== -1 && mapping.balance !== -1 && out.length >= 2 && !out.some((r) => r.value < 0)) {
-    const signs = inferSignsFromBalance(out)
+  if (mapping.amount !== -1 && mapping.balance !== -1 && out.length >= 1 && !out.some((r) => r.value < 0)) {
+    const signs = inferSignsFromBalance(out, openingBalance)
     if (signs) for (let i = 0; i < out.length; i++) {
       if (signs[i] !== 0) out[i].value = signs[i] * Math.abs(out[i].value)
     }
@@ -362,7 +389,7 @@ export function buildTransactions(dataRows, mapping, dateHint) {
  * saldos consecutivos, nas duas ordens possíveis (mais antigo primeiro / mais recente
  * primeiro). Devolve um array de -1/0/+1, ou null se os saldos não forem consistentes.
  */
-function inferSignsFromBalance(entries) {
+function inferSignsFromBalance(entries, openingBalance = null) {
   const n = entries.length
   let best = null, bestScore = -1
   let comparable = 0
@@ -370,6 +397,20 @@ function inferSignsFromBalance(entries) {
     const signs = new Array(n).fill(0)
     let score = 0
     let pairs = 0
+    // Semente: o saldo inicial resolve o sentido do 1.º movimento cronológico
+    // (dir=1 → entries[0]; dir=-1 → entries[n-1]), que de outra forma não tem
+    // saldo anterior com que comparar. Só conta quando bate certo — um saldo
+    // inicial errado é simplesmente ignorado (sem regressão).
+    if (openingBalance != null) {
+      const fc = dir === 1 ? 0 : n - 1
+      const e = entries[fc]
+      if (e && e.balance != null) {
+        const delta = e.balance - openingBalance
+        const amt = Math.abs(e.value)
+        if (Math.abs(delta - amt) < 0.015) { signs[fc] = 1; score++; pairs++ }
+        else if (Math.abs(delta + amt) < 0.015) { signs[fc] = -1; score++; pairs++ }
+      }
+    }
     for (let i = 0; i < n - 1; i++) {
       // dir=1: ordem cronológica (saldo[i+1] = saldo[i] ± valor[i+1]); dir=-1: mais recente primeiro
       const [prev, next, j] = dir === 1 ? [entries[i], entries[i + 1], i + 1] : [entries[i + 1], entries[i], i]

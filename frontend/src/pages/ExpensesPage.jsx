@@ -220,7 +220,7 @@ export default function ExpensesPage() {
   const preview = useMemo(() => {
     if (!importFile || !mapping) return null
     if (mapping.date === -1 || mapping.description === -1 || (mapping.amount === -1 && mapping.debit === -1)) return null
-    const result = buildTransactions(importFile.analysis.dataRows, mapping, importFile.analysis.dateHint)
+    const result = buildTransactions(importFile.analysis.dataRows, mapping, importFile.analysis.dateHint, importFile.analysis.openingBalance)
     if (categoryRules) {
       for (const r of result.rows) {
         const ruled = categoryRules[r.description.trim().toLowerCase().replace(/\s+/g, ' ')]

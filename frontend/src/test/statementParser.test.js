@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAmount, parseDate, buildTransactions } from '../statementParser'
+import { parseAmount, parseDate, buildTransactions, findOpeningBalance, analyzeRows } from '../statementParser'
 
 describe('parseAmount — formatos monetários', () => {
   it('formato PT (1.234,56)', () => {
@@ -102,7 +102,7 @@ describe('buildTransactions — sinal e valor dos movimentos', () => {
   // tem saldo anterior com que comparar, por isso o seu sentido não é determinável e fica
   // por omissão como ENTRADA — mesmo quando é uma saída. Este teste fixa o comportamento
   // atual para o tornar visível; afeta 1 movimento por importação (só PDFs sem sinais).
-  it('[limitação] o primeiro movimento de um extrato sem sinais fica como entrada', () => {
+  it('sem saldo inicial, o primeiro movimento de um extrato sem sinais fica como entrada (fallback)', () => {
     const mapping = { date: 0, description: 1, amount: 2, debit: -1, credit: -1, currency: -1, state: -1, fee: -1, balance: 3 }
     const { rows } = buildTransactions([
       ['2026-03-05', 'Continente', '85,40', '914,60'],
@@ -110,8 +110,47 @@ describe('buildTransactions — sinal e valor dos movimentos', () => {
       ['2026-03-25', 'Salário', '2000,00', '2899,60'],
     ], mapping, '2026-03-31')
 
-    // na realidade foi uma saída, mas o algoritmo não o consegue saber sem o saldo inicial
+    // sem saldo anterior com que comparar, mantém-se o fallback (entrada)
     expect(rows.find((r) => r.description === 'Continente').inflow).toBe(true)
+  })
+
+  it('com saldo inicial, o primeiro movimento é sinalizado corretamente (saída)', () => {
+    // saldo inicial 1000 → 914,60 (−85,40 Continente, agora determinável)
+    const mapping = { date: 0, description: 1, amount: 2, debit: -1, credit: -1, currency: -1, state: -1, fee: -1, balance: 3 }
+    const { rows } = buildTransactions([
+      ['2026-03-05', 'Continente', '85,40', '914,60'],
+      ['2026-03-15', 'Farmácia', '15,00', '899,60'],
+      ['2026-03-25', 'Salário', '2000,00', '2899,60'],
+    ], mapping, '2026-03-31', 1000)
+
+    expect(rows.find((r) => r.description === 'Continente').inflow).toBe(false)
+    expect(rows.find((r) => r.description === 'Farmácia').inflow).toBe(false)
+    expect(rows.find((r) => r.description === 'Salário').inflow).toBe(true)
+  })
+
+  it('resolve extratos por ordem inversa (mais recente primeiro) com saldo inicial', () => {
+    const mapping = { date: 0, description: 1, amount: 2, debit: -1, credit: -1, currency: -1, state: -1, fee: -1, balance: 3 }
+    const { rows } = buildTransactions([
+      ['2026-03-25', 'Salário', '2000,00', '2899,60'],
+      ['2026-03-15', 'Farmácia', '15,00', '899,60'],
+      ['2026-03-05', 'Continente', '85,40', '914,60'],
+    ], mapping, '2026-03-31', 1000)
+
+    expect(rows.find((r) => r.description === 'Continente').inflow).toBe(false)
+    expect(rows.find((r) => r.description === 'Salário').inflow).toBe(true)
+  })
+
+  it('um saldo inicial incoerente não altera o resultado (fallback seguro)', () => {
+    const mapping = { date: 0, description: 1, amount: 2, debit: -1, credit: -1, currency: -1, state: -1, fee: -1, balance: 3 }
+    const { rows } = buildTransactions([
+      ['2026-03-05', 'Continente', '85,40', '914,60'],
+      ['2026-03-15', 'Farmácia', '15,00', '899,60'],
+      ['2026-03-25', 'Salário', '2000,00', '2899,60'],
+    ], mapping, '2026-03-31', 42) // valor que não bate com os saldos
+
+    expect(rows.find((r) => r.description === 'Farmácia').inflow).toBe(false)
+    expect(rows.find((r) => r.description === 'Salário').inflow).toBe(true)
+    expect(rows.find((r) => r.description === 'Continente').inflow).toBe(true) // volta ao fallback
   })
 
   it('subtrai a comissão (fee) ao valor do movimento', () => {
@@ -122,5 +161,39 @@ describe('buildTransactions — sinal e valor dos movimentos', () => {
 
     // saída de 100 + 2 de comissão = 102 a sair da conta
     expect(rows[0]).toMatchObject({ amount: 102, inflow: false })
+  })
+})
+
+describe('findOpeningBalance — deteção do saldo inicial', () => {
+  it('rótulo e valor em células separadas', () => {
+    expect(findOpeningBalance([['SALDO ANTERIOR', '', '1.000,00']])).toBe(1000)
+  })
+  it('rótulo "Saldo inicial"', () => {
+    expect(findOpeningBalance([['Saldo inicial', '2.345,67']])).toBe(2345.67)
+  })
+  it('rótulo e valor na mesma célula', () => {
+    expect(findOpeningBalance([['Saldo anterior: 1.000,00 €']])).toBe(1000)
+  })
+  it('devolve null quando não há linha de saldo inicial', () => {
+    expect(findOpeningBalance([['Data', 'Descrição', 'Valor'], ['2026-03-01', 'X', '10']])).toBeNull()
+  })
+})
+
+describe('analyzeRows — integra o saldo inicial de ponta a ponta', () => {
+  it('extrato PDF sem sinais com "Saldo anterior" fica todo com o sentido certo', () => {
+    const rows = [
+      ['Extrato de conta'],
+      ['SALDO ANTERIOR', '1.000,00'],
+      ['Data', 'Descrição', 'Valor', 'Saldo'],
+      ['2026-03-05', 'Continente', '85,40', '914,60'],
+      ['2026-03-15', 'Farmácia', '15,00', '899,60'],
+      ['2026-03-25', 'Salário', '2000,00', '2899,60'],
+    ]
+    const analysis = analyzeRows(rows)
+    expect(analysis.openingBalance).toBe(1000)
+
+    const { rows: txs } = buildTransactions(analysis.dataRows, analysis.mapping, analysis.dateHint, analysis.openingBalance)
+    expect(txs.find((r) => r.description === 'Continente').inflow).toBe(false)
+    expect(txs.find((r) => r.description === 'Salário').inflow).toBe(true)
   })
 })
