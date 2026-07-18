@@ -89,6 +89,22 @@ export const api = {
   updateGoal: (id, data) => request(`/goals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   contributeGoal: (id, amount) => request(`/goals/${id}/contribute`, { method: 'POST', body: JSON.stringify({ amount }) }),
   deleteGoal: (id) => request(`/goals/${id}`, { method: 'DELETE' }),
+
+  // Despesas e contas correntes
+  getExpenses: (month, accountId) => {
+    const q = new URLSearchParams()
+    if (month) q.set('month', month)
+    if (accountId) q.set('accountId', accountId)
+    const s = q.toString()
+    return request(`/expenses${s ? `?${s}` : ''}`)
+  },
+  addExpenseAccount: (data) => request('/expenses/accounts', { method: 'POST', body: JSON.stringify(data) }),
+  updateExpenseAccount: (id, data) => request(`/expenses/accounts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteExpenseAccount: (id) => request(`/expenses/accounts/${id}`, { method: 'DELETE' }),
+  addTransaction: (data) => request('/expenses/transactions', { method: 'POST', body: JSON.stringify(data) }),
+  updateTransaction: (id, data) => request(`/expenses/transactions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTransaction: (id) => request(`/expenses/transactions/${id}`, { method: 'DELETE' }),
+  importTransactions: (data) => request('/expenses/import', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 // ---------- Moeda de apresentação ----------

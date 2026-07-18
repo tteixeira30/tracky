@@ -4,17 +4,19 @@ import IncomePage from './pages/IncomePage'
 import InvestmentsPage from './pages/InvestmentsPage'
 import GoalsPage from './pages/GoalsPage'
 import CalendarPage from './pages/CalendarPage'
+import ExpensesPage from './pages/ExpensesPage'
 import AchievementsPage from './pages/AchievementsPage'
 import AuthPage from './pages/AuthPage'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './components/AuthContext'
 import { ThemeProvider, useTheme } from './components/ThemeContext'
 import Dropdown from './components/Dropdown'
-import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconTrophy, IconLogout, IconSun, IconMoon } from './components/Icons'
+import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconReceipt, IconTrophy, IconLogout, IconSun, IconMoon } from './components/Icons'
 
 const TABS = [
   { id: 'dashboard', label: 'Painel', icon: IconGrid },
   { id: 'income', label: 'Rendimento', icon: IconWallet },
+  { id: 'expenses', label: 'Despesas', icon: IconReceipt },
   { id: 'investments', label: 'Investimentos', icon: IconTrendingUp },
   { id: 'goals', label: 'Objetivos', icon: IconTarget },
   { id: 'calendar', label: 'Calendário', icon: IconCalendar },
@@ -112,6 +114,7 @@ function Shell() {
       <main className="main" key={baseCurrency}>
         {tab === 'dashboard' && <DashboardPage />}
         {tab === 'income' && <IncomePage />}
+        {tab === 'expenses' && <ExpensesPage />}
         {tab === 'investments' && <InvestmentsPage />}
         {tab === 'goals' && <GoalsPage />}
         {tab === 'calendar' && <CalendarPage />}
