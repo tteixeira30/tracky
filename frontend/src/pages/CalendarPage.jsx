@@ -53,8 +53,6 @@ export default function CalendarPage() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [toDelete, setToDelete] = useState(null)
-  const [balanceModal, setBalanceModal] = useState(false)
-  const [balanceInput, setBalanceInput] = useState('')
   const [busy, setBusy] = useState(false)
 
   const loadMonth = (m) => api.getCalendar(m).then(setData)
@@ -122,18 +120,6 @@ export default function CalendarPage() {
     finally { setBusy(false) }
   }
 
-  const saveBalance = async () => {
-    setBusy(true)
-    try {
-      const val = balanceInput === '' ? null : toEur(Number(balanceInput))
-      await api.setBalance(val)
-      setBalanceModal(false)
-      await loadForecast()
-      toast.success('Saldo atualizado', 'A previsão foi recalculada.')
-    } catch (e) { toast.error('Erro', e.message) }
-    finally { setBusy(false) }
-  }
-
   // grelha do mês
   const grid = useMemo(() => {
     const [y, mo] = month.split('-').map(Number)
@@ -173,9 +159,6 @@ export default function CalendarPage() {
           <p>Eventos recorrentes, previsão de saldo e próximos movimentos.</p>
         </div>
         <div className="page-actions">
-          <button className="btn ghost" onClick={() => { setBalanceInput(forecast?.startingBalance != null ? String(fromEur(forecast.startingBalance)) : ''); setBalanceModal(true) }}>
-            <IconWallet size={15} /> Saldo atual
-          </button>
           <button className="btn" onClick={openAdd}><IconPlus size={15} /> Novo evento</button>
         </div>
       </div>
@@ -235,8 +218,8 @@ export default function CalendarPage() {
               <h3><IconTrendingUp size={16} /> Próximos movimentos</h3>
               <div className="sub">
                 {forecast?.hasBalance
-                  ? `Saldo atual ${fmtEur(forecast.startingBalance)} · previsto a 60 dias ${fmtEur(forecast.endBalance)}`
-                  : 'Fluxo acumulado (define o saldo atual para veres a previsão do saldo)'}
+                  ? `Saldo em contas ${fmtEur(forecast.startingBalance)} · previsto a 60 dias ${fmtEur(forecast.endBalance)}`
+                  : 'Fluxo acumulado (define o saldo das tuas contas em Despesas para veres a previsão do saldo)'}
               </div>
             </div>
           </div>
@@ -362,25 +345,6 @@ export default function CalendarPage() {
                           onChange={(iso) => setForm({ ...form, eventDate: iso })} />
             </div>
           )}
-        </div>
-      </Modal>
-
-      <Modal open={balanceModal} onClose={() => setBalanceModal(false)}
-             title="Saldo atual em conta"
-             subtitle="Ponto de partida para a previsão de saldo. Deixa em branco para remover."
-             footer={
-               <>
-                 <button className="btn ghost" onClick={() => setBalanceModal(false)}>Cancelar</button>
-                 <button className="btn" onClick={saveBalance} disabled={busy}>{busy ? 'A guardar…' : 'Guardar'}</button>
-               </>
-             }>
-        <div className="field full">
-          <label>Saldo</label>
-          <div className="input-affix">
-            <input type="number" step="0.01" placeholder="Ex: 2500" autoFocus value={balanceInput}
-                   onChange={(e) => setBalanceInput(e.target.value)} />
-            <span className="affix">{cur}</span>
-          </div>
         </div>
       </Modal>
 

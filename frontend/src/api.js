@@ -45,7 +45,6 @@ export const api = {
   addCalendarEvent: (data) => request('/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
   updateCalendarEvent: (id, data) => request(`/calendar/events/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCalendarEvent: (id) => request(`/calendar/events/${id}`, { method: 'DELETE' }),
-  setBalance: (balance) => request('/calendar/balance', { method: 'PUT', body: JSON.stringify({ balance }) }),
 
   // Moeda
   getCurrency: () => request('/currency'),
