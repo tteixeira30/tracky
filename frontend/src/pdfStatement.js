@@ -4,7 +4,16 @@
 // das linhas de dados às colunas do cabeçalho. Só funciona com PDFs com texto
 // embebido — extratos digitalizados (imagem) precisariam de OCR.
 
-import { HEADER_HINTS } from './statementParser.js'
+import { findHeaderIndex } from './statementParser.js'
+
+/**
+ * Converte itens de texto do pdf.js para o formato interno, descartando texto
+ * rodado (rodapés verticais nas margens, que de outra forma se colam às linhas
+ * da tabela com o mesmo Y).
+ */
+export const mapTextItems = (items) => items
+  .filter((it) => Math.abs(it.transform[1]) < 0.001)
+  .map((it) => ({ str: it.str, x: it.transform[4], y: it.transform[5], width: it.width }))
 
 /**
  * Agrupa itens de texto {str, x, y, width} numa lista de linhas, cada uma com
@@ -46,11 +55,7 @@ export function itemsToLines(items) {
  * pelo que o alinhamento por índice falharia — usa-se a posição X).
  */
 export function linesToTable(lines) {
-  let headerIdx = -1
-  for (let i = 0; i < lines.length; i++) {
-    const hits = lines[i].filter((c) => HEADER_HINTS.test(c.text)).length
-    if (hits >= 2 && lines[i].length >= 3) { headerIdx = i; break }
-  }
+  const headerIdx = findHeaderIndex(lines.map((l) => l.map((c) => c.text)))
   if (headerIdx === -1) return lines.map((l) => l.map((c) => c.text))
 
   const cols = lines[headerIdx].map((c) => ({ x: c.x, end: c.end, center: (c.x + c.end) / 2 }))
@@ -70,10 +75,13 @@ export function linesToTable(lines) {
     return best
   }
 
+  const leftEdge = Math.min(...cols.map((c) => c.x))
   return lines.map((line, i) => {
     if (i === headerIdx) return cols.map((_, k) => lines[headerIdx][k].text)
     const row = new Array(cols.length).fill('')
     for (const cell of line) {
+      // ignora texto fora da tabela, à esquerda da primeira coluna (rodapés verticais, símbolos soltos)
+      if ((cell.x + cell.end) / 2 < leftEdge - 15) continue
       const k = nearestCol(cell)
       row[k] = row[k] ? `${row[k]} ${cell.text}` : cell.text
     }
@@ -99,10 +107,8 @@ export async function extractPdfRows(data) {
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p)
       const content = await page.getTextContent()
-      const items = content.items.map((it) => ({
-        str: it.str, x: it.transform[4], y: it.transform[5], width: it.width,
-      }))
-      if (items.some((it) => it.str.trim() !== '')) hasText = true
+      const items = mapTextItems(content.items)
+      if (content.items.some((it) => it.str && it.str.trim() !== '')) hasText = true
       lines.push(...itemsToLines(items))
     }
   } finally {

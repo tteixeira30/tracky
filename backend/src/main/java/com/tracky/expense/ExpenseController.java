@@ -147,6 +147,9 @@ public class ExpenseController {
      * Importa linhas de um extrato já estruturadas pelo frontend. Movimentos que já
      * existam na conta (mesma data, valor, sentido e descrição) são ignorados, para
      * que reimportar o mesmo extrato — ou extratos com meses sobrepostos — seja seguro.
+     * A comparação é por contagem (multiset): um extrato pode ter movimentos
+     * legitimamente idênticos (ex.: duas compras iguais no mesmo dia) e cada
+     * ocorrência já existente na conta só absorve uma ocorrência do ficheiro.
      */
     @PostMapping("/import")
     public ImportResult importRows(@AuthenticationPrincipal User user, @Valid @RequestBody ImportRequest req) {
@@ -154,16 +157,21 @@ public class ExpenseController {
 
         LocalDate min = req.rows().stream().map(ImportRow::date).min(LocalDate::compareTo).orElseThrow();
         LocalDate max = req.rows().stream().map(ImportRow::date).max(LocalDate::compareTo).orElseThrow();
-        Set<String> existing = new HashSet<>();
+        Map<String, Integer> existing = new HashMap<>();
         for (Transaction t : transactions.findByUserIdAndAccountIdAndTxDateBetween(user.getId(), a.getId(), min, max)) {
-            existing.add(dedupeKey(t.getTxDate(), t.getAmount(), t.isInflow(), t.getDescription()));
+            existing.merge(dedupeKey(t.getTxDate(), t.getAmount(), t.isInflow(), t.getDescription()), 1, Integer::sum);
         }
 
         int imported = 0, skipped = 0;
         List<Transaction> batch = new ArrayList<>();
         for (ImportRow row : req.rows()) {
             String key = dedupeKey(row.date(), row.amount(), row.inflow(), row.description());
-            if (!existing.add(key)) { skipped++; continue; }
+            Integer remaining = existing.get(key);
+            if (remaining != null && remaining > 0) {
+                existing.put(key, remaining - 1);
+                skipped++;
+                continue;
+            }
             Transaction t = new Transaction();
             t.setUserId(user.getId());
             t.setAccountId(a.getId());

@@ -44,8 +44,12 @@ function detectDelimiter(text) {
 
 // ---------- Datas e valores ----------
 
-/** Converte texto para data ISO (AAAA-MM-DD); devolve null se não reconhecer. */
-export function parseDate(raw) {
+/**
+ * Converte texto para data ISO (AAAA-MM-DD); devolve null se não reconhecer.
+ * `dateHint` (data ISO mais recente conhecida do documento) permite resolver
+ * datas sem ano, tipo "02-03", comuns nos extratos PDF do Santander.
+ */
+export function parseDate(raw, dateHint) {
   if (!raw) return null
   const s = String(raw).trim().slice(0, 10)
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -54,7 +58,22 @@ export function parseDate(raw) {
   if (m) return valid(m[3], m[2], m[1]) // dia/mês/ano (formato PT)
   m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})$/)
   if (m) return valid(`20${m[3]}`, m[2], m[1])
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})$/)
+  if (m && dateHint) {
+    const year = Number(dateHint.slice(0, 4))
+    const iso = valid(year, m[2], m[1])
+    if (!iso) return null
+    // se a data ficar bem depois da última data do documento, é do ano anterior
+    // (ex.: extrato de janeiro com movimentos de dezembro)
+    return iso > addDaysIso(dateHint, 45) ? valid(year - 1, m[2], m[1]) : iso
+  }
   return null
+}
+
+function addDaysIso(iso, days) {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
 }
 
 function valid(y, mo, d) {
@@ -89,7 +108,7 @@ const CATEGORY_RULES = [
   ['RESTAURANT', /restaurante|mcdonald|burger|kfc|pizza|sushi|caf[eé]\b|pastelaria|padaria|uber\s*eats|glovo|bolt\s*food|telepizza|starbucks/i],
   ['TRANSPORT', /uber(?!\s*eats)|bolt(?!\s*food)|cp\s|metro|carris|galp|bp\b|repsol|cepsa|prio\b|combust|gasolina|via\s*verde|brisa|flixbus|ryanair|easyjet|tap\b/i],
   ['HOUSING', /renda|condom[ií]nio|edp\b|endesa|iberdrola|goldenergy|[aá]guas|meo\b|nos\b|vodafone|digi\b|luz\b|g[aá]s\b|eletricidade/i],
-  ['SUBSCRIPTION', /netflix|spotify|hbo|disney|prime|youtube|icloud|apple\.com|google\s*(one|play)|playstation|xbox|crunchyroll|dazn|subscri/i],
+  ['SUBSCRIPTION', /netflix|spotify|hbo|disney|\bprime\b|youtube|icloud|apple\.com|google\s*(one|play)|playstation|xbox|crunchyroll|dazn|patreon|subscri/i],
   ['SHOPPING', /amazon|fnac|worten|zara|h&m|primark|decathlon|ikea|leroy|aliexpress|temu|shein|el\s*corte/i],
   ['HEALTH', /farm[aá]cia|hospital|cl[ií]nica|dentista|wells|cuf\b|lus[ií]adas|seguro\s*sa[uú]de|gin[aá]sio|fitness|solinca/i],
   ['LEISURE', /cinema|teatro|concerto|museu|bilhete|ticketline|steam|epic\s*games|nintendo|viagem|hotel|booking|airbnb/i],
@@ -110,6 +129,32 @@ export function autoCategory(description, inflow) {
 
 export const HEADER_HINTS = /data|date|descri|description|montante|amount|valor|d[eé]bito|debit|cr[eé]dito|credit|movimento|saldo|balance|currency|moeda/i
 
+// Categorias de colunas usadas para reconhecer a linha de cabeçalho de uma tabela de movimentos.
+const HEADER_CATEGORIES = [
+  /data|date|\bmov\b/i,
+  /descri|description|movimento|detalhe|details?|narrative|memo|concept/i,
+  /montante|amount|valor|import[aâ]ncia|d[eé]bito|debit|cr[eé]dito|credit/i,
+  /saldo|balance/i,
+]
+
+/**
+ * Procura a linha de cabeçalho da tabela de movimentos. Primeiro procura em todo o
+ * documento uma linha "forte" (≥3 categorias de colunas reconhecidas) — necessário
+ * nos PDFs, em que a tabela aparece depois de páginas de texto; em último recurso,
+ * a primeira linha inicial com ≥2 células com cara de cabeçalho (CSVs simples).
+ */
+export function findHeaderIndex(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].length < 3) continue
+    const score = HEADER_CATEGORIES.filter((re) => rows[i].some((c) => re.test(c))).length
+    if (score >= 3) return i
+  }
+  for (let i = 0; i < Math.min(rows.length, 12); i++) {
+    if (rows[i].filter((c) => HEADER_HINTS.test(c)).length >= 2) return i
+  }
+  return -1
+}
+
 /**
  * Analisa um CSV de extrato: encontra a linha de cabeçalho, deteta o formato e
  * propõe um mapeamento de colunas. Devolve { format, headers, dataRows, mapping }.
@@ -124,12 +169,21 @@ export function analyzeStatement(text) {
 export function analyzeRows(rows) {
   if (!rows || rows.length === 0) return null
 
-  let headerIdx = -1
-  for (let i = 0; i < Math.min(rows.length, 12); i++) {
-    const hits = rows[i].filter((c) => HEADER_HINTS.test(c)).length
-    if (hits >= 2) { headerIdx = i; break }
+  // data mais recente com ano presente no documento — resolve datas sem ano ("02-03")
+  let dateHint = null
+  for (const r of rows.slice(0, 400)) {
+    for (const c of r) {
+      const found = String(c).match(/\b(20\d{2}-\d{2}-\d{2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/g)
+      if (!found) continue
+      for (const token of found) {
+        const iso = parseDate(token)
+        if (iso && (!dateHint || iso > dateHint)) dateHint = iso
+      }
+    }
   }
-  if (headerIdx === -1) return { format: 'unknown', headers: rows[0], dataRows: rows.slice(1), mapping: emptyMapping() }
+
+  const headerIdx = findHeaderIndex(rows)
+  if (headerIdx === -1) return { format: 'unknown', headers: rows[0], dataRows: rows.slice(1), mapping: emptyMapping(), dateHint }
 
   const headers = rows[headerIdx].map((h) => h.trim())
   const dataRows = rows.slice(headerIdx + 1)
@@ -160,13 +214,78 @@ export function analyzeRows(rows) {
       mapping.debit = -1; mapping.credit = -1
       mapping.amount = find(/montante|^amount$|^valor\b|import[aâ]ncia|^value/)
     }
-    if (find(/santander/) !== -1 || rows.slice(0, 6).some((r) => r.some((c) => /santander/i.test(c)))) format = 'santander'
+    if (find(/santander/) !== -1 || rows.slice(0, 40).some((r) => r.some((c) => /santander/i.test(c)))) format = 'santander'
   }
+
+  refineMappingWithData(mapping, headers, dataRows, dateHint)
 
   if (mapping.date === -1 || mapping.description === -1 || (mapping.amount === -1 && mapping.debit === -1)) {
     format = 'unknown'
   }
-  return { format, headers, dataRows, mapping }
+  return { format, headers, dataRows, mapping, dateHint }
+}
+
+/**
+ * Confirma/corrige o mapeamento olhando para os próprios dados — nos PDFs os nomes
+ * das colunas nem sempre chegam (ex.: no extrato Santander a data chama-se "Mov" e
+ * há duas colunas "Valor": a data-valor e o montante).
+ */
+function refineMappingWithData(mapping, headers, dataRows, dateHint) {
+  const sample = dataRows.filter((r) => r.some((c) => c && String(c).trim() !== '')).slice(0, 150)
+  if (sample.length === 0) return
+  const ncols = Math.max(headers.length, ...sample.map((r) => r.length))
+
+  const rate = (idx, fn) => {
+    if (idx == null || idx < 0) return 0
+    let hit = 0, total = 0
+    for (const r of sample) {
+      const v = r[idx]
+      if (v != null && String(v).trim() !== '') { total++; if (fn(v) != null) hit++ }
+    }
+    return total === 0 ? 0 : hit / total
+  }
+  const dateRate = (k) => rate(k, (v) => parseDate(v, dateHint))
+
+  // coluna da data: a que mais parece conter datas
+  if (dateRate(mapping.date) < 0.5) {
+    let best = -1, bestRate = 0.5
+    for (let k = 0; k < ncols; k++) {
+      const r = dateRate(k)
+      if (r > bestRate) { bestRate = r; best = k }
+    }
+    if (best !== -1) mapping.date = best
+  }
+
+  // coluna do montante (quando não há débito/crédito): valores numéricos, excluindo
+  // data e saldo; em caso de empate fica a coluna mais à direita (posição habitual)
+  if (mapping.debit === -1
+      && (mapping.amount === -1 || mapping.amount === mapping.date || rate(mapping.amount, parseAmount) < 0.5)) {
+    let best = -1, bestRate = 0.5
+    for (let k = 0; k < ncols; k++) {
+      if (k === mapping.date || k === mapping.balance || k === mapping.description) continue
+      const r = rate(k, parseAmount)
+      if (r >= bestRate) { bestRate = r; best = k }
+    }
+    if (best !== -1) mapping.amount = best
+  }
+
+  // coluna da descrição: a de texto mais longo que não seja data nem número
+  if (mapping.description === -1 || mapping.description === mapping.date || mapping.description === mapping.amount) {
+    let best = -1, bestLen = 0
+    for (let k = 0; k < ncols; k++) {
+      if (k === mapping.date || k === mapping.amount || k === mapping.balance
+          || k === mapping.debit || k === mapping.credit) continue
+      if (rate(k, parseAmount) > 0.5 || dateRate(k) > 0.5) continue
+      let len = 0, n = 0
+      for (const r of sample) {
+        const v = r[k]
+        if (v && String(v).trim() !== '') { len += String(v).length; n++ }
+      }
+      const avg = n === 0 ? 0 : len / n
+      if (avg > bestLen) { bestLen = avg; best = k }
+    }
+    if (best !== -1 && bestLen >= 4) mapping.description = best
+  }
 }
 
 function emptyMapping() {
@@ -177,11 +296,11 @@ function emptyMapping() {
  * Constrói as transações a importar a partir das linhas de dados e do mapeamento.
  * Devolve { rows: [{date, description, amount, inflow, category}], ignored }.
  */
-export function buildTransactions(dataRows, mapping) {
+export function buildTransactions(dataRows, mapping, dateHint) {
   const out = []
   let ignored = 0
   for (const cells of dataRows) {
-    const date = parseDate(cells[mapping.date])
+    const date = parseDate(cells[mapping.date], dateHint)
     const description = (cells[mapping.description] || '').trim()
     if (!date || !description) { ignored++; continue }
 

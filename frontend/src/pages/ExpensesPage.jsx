@@ -195,7 +195,7 @@ export default function ExpensesPage() {
   const preview = useMemo(() => {
     if (!importFile || !mapping) return null
     if (mapping.date === -1 || mapping.description === -1 || (mapping.amount === -1 && mapping.debit === -1)) return null
-    return buildTransactions(importFile.analysis.dataRows, mapping)
+    return buildTransactions(importFile.analysis.dataRows, mapping, importFile.analysis.dateHint)
   }, [importFile, mapping])
 
   const doImport = async () => {
