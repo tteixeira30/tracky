@@ -94,7 +94,7 @@ const CATEGORY_RULES = [
   ['HEALTH', /farm[aá]cia|hospital|cl[ií]nica|dentista|wells|cuf\b|lus[ií]adas|seguro\s*sa[uú]de|gin[aá]sio|fitness|solinca/i],
   ['LEISURE', /cinema|teatro|concerto|museu|bilhete|ticketline|steam|epic\s*games|nintendo|viagem|hotel|booking|airbnb/i],
   ['INCOME', /sal[aá]rio|vencimento|ordenado|payroll|reembolso|juros\s*(recebidos)?|dividendo/i],
-  ['TRANSFER', /transfer[eê]ncia|trf\b|mb\s*way|mbway|levantamento|dep[oó]sito|top.?up|revolut|trade\s*republic/i],
+  ['TRANSFER', /transfer[eê]ncia|trf\b|mb\s*way|mbway|levantamento|dep[oó]sito|top.?up|carregamento|revolut|trade\s*republic/i],
 ]
 
 /** Sugere uma categoria a partir da descrição do movimento. */
@@ -138,12 +138,14 @@ export function analyzeStatement(text) {
   }
 
   let format = 'generic'
-  if (find(/completed date/) !== -1 && find(/started date/) !== -1) {
-    // Revolut: Type, Product, Started Date, Completed Date, Description, Amount, Fee, Currency, State, Balance
+  if ((find(/completed date/) !== -1 && find(/started date/) !== -1)
+      || (find(/data de conclus/) !== -1 && find(/data de in[ií]cio/) !== -1)) {
+    // Revolut (EN): Type, Product, Started Date, Completed Date, Description, Amount, Fee, Currency, State, Balance
+    // Revolut (PT): Tipo, Produto, Data de início, Data de Conclusão, Descrição, Montante, Comissão, Moeda, Estado, Saldo
     format = 'revolut'
-    mapping.date = find(/completed date/)
-    mapping.description = find(/^description$/)
-    mapping.amount = find(/^amount$/)
+    mapping.date = find(/completed date|data de conclus/)
+    mapping.description = find(/^description$|^descri/)
+    mapping.amount = find(/^amount$|^montante$/)
   } else {
     mapping.date = find(/data.*(operac|mov|lan[çc])/) !== -1 ? find(/data.*(operac|mov|lan[çc])/) : find(/^data\b|date/)
     mapping.description = find(/descri|description|movimento|detalhe|details?|narrative|memo|referência|referencia|concept/)
@@ -179,8 +181,9 @@ export function buildTransactions(dataRows, mapping) {
     if (!date || !description) { ignored++; continue }
 
     if (mapping.state !== -1) {
-      const state = (cells[mapping.state] || '').trim().toUpperCase()
-      if (state && state !== 'COMPLETED') { ignored++; continue }
+      // ignora movimentos não finalizados (pendentes, revertidos, recusados…) em qualquer idioma conhecido
+      const state = (cells[mapping.state] || '').trim()
+      if (state && /pend|revert|declin|fail|cancel|recus|anulad|estorn/i.test(state)) { ignored++; continue }
     }
     if (mapping.currency !== -1) {
       const cur = (cells[mapping.currency] || '').trim().toUpperCase()
