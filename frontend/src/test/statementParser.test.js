@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAmount, parseDate, buildTransactions, findOpeningBalance, analyzeRows } from '../statementParser'
+import { parseAmount, parseDate, buildTransactions, findOpeningBalance, analyzeRows, categoryKey } from '../statementParser'
 
 describe('parseAmount — formatos monetários', () => {
   it('formato PT (1.234,56)', () => {
@@ -176,6 +176,21 @@ describe('findOpeningBalance — deteção do saldo inicial', () => {
   })
   it('devolve null quando não há linha de saldo inicial', () => {
     expect(findOpeningBalance([['Data', 'Descrição', 'Valor'], ['2026-03-01', 'X', '10']])).toBeNull()
+  })
+})
+
+describe('categoryKey — chave de categorização (paridade com o backend)', () => {
+  it('ignora referências e datas: mesmo comerciante → mesma chave', () => {
+    expect(categoryKey('COMPRA 1234 CONTINENTE COLOMBO 12/03')).toBe('compra continente colombo')
+    expect(categoryKey('COMPRA 5678 CONTINENTE COLOMBO 15/04')).toBe('compra continente colombo')
+  })
+  it('mantém letras acentuadas', () => {
+    expect(categoryKey('CAFÉ CENTRAL 99')).toBe('café central')
+  })
+  it('descrições só com números/pontuação → vazio', () => {
+    expect(categoryKey('  1234 //  ')).toBe('')
+    expect(categoryKey(null)).toBe('')
+    expect(categoryKey(undefined)).toBe('')
   })
 })
 

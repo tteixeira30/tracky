@@ -116,6 +116,20 @@ const CATEGORY_RULES = [
   ['TRANSFER', /transfer[eê]ncia|trf\b|mb\s*way|mbway|levantamento|dep[oó]sito|top.?up|carregamento|revolut|trade\s*republic/i],
 ]
 
+/**
+ * Chave de categorização: identifica o "comerciante" da descrição ignorando as
+ * partes variáveis (referências, datas, valores, pontuação), para que a mesma
+ * regra apanhe movimentos do mesmo sítio mesmo com números diferentes.
+ * Tem de ser idêntica à versão do backend (ExpenseController.categoryKey).
+ */
+export const categoryKey = (description) =>
+  (description || '')
+    .toLowerCase()
+    .replace(/\d+/g, ' ')          // referências, datas, valores
+    .replace(/[^\p{L}\s]/gu, ' ')  // pontuação e símbolos
+    .replace(/\s+/g, ' ')          // colapsa espaços
+    .trim()
+
 /** Sugere uma categoria a partir da descrição do movimento. */
 export function autoCategory(description, inflow) {
   const d = description || ''

@@ -169,7 +169,7 @@ public class ExpenseController {
      * movimentos do utilizador com a mesma descrição normalizada.
      */
     private void applyCategoryRule(User user, String description, Transaction.Category category) {
-        String key = normalizeDesc(description);
+        String key = categoryKey(description);
         if (key.isEmpty()) return;
 
         CategoryRule rule = rules.findByUserIdAndMatchKey(user.getId(), key).orElseGet(() -> {
@@ -182,7 +182,7 @@ public class ExpenseController {
         rules.save(rule);
 
         List<Transaction> toUpdate = transactions.findByUserId(user.getId()).stream()
-                .filter(t -> key.equals(normalizeDesc(t.getDescription())) && t.getCategory() != category)
+                .filter(t -> key.equals(categoryKey(t.getDescription())) && t.getCategory() != category)
                 .peek(t -> t.setCategory(category))
                 .toList();
         transactions.saveAll(toUpdate);
@@ -233,7 +233,7 @@ public class ExpenseController {
             t.setDescription(truncate(row.description().trim()));
             t.setAmount(row.amount().setScale(2, RoundingMode.HALF_UP));
             t.setInflow(row.inflow());
-            Transaction.Category ruled = ruleMap.get(normalizeDesc(row.description()));
+            Transaction.Category ruled = ruleMap.get(categoryKey(row.description()));
             t.setCategory(ruled != null ? ruled : parseCategory(row.category()));
             batch.add(t);
             imported++;
@@ -279,9 +279,24 @@ public class ExpenseController {
         return s.length() > 500 ? s.substring(0, 500) : s;
     }
 
-    /** Normalização de descrições para comparação (dedupe e regras de categoria). */
+    /** Normalização de descrições para dedupe (comparação exata entre movimentos). */
     private static String normalizeDesc(String description) {
         return description == null ? "" : description.trim().toLowerCase().replaceAll("\\s+", " ");
+    }
+
+    /**
+     * Chave de categorização: identifica o "comerciante" da descrição ignorando as
+     * partes variáveis (referências, datas, valores, pontuação), para que a mesma
+     * regra apanhe movimentos do mesmo sítio mesmo com números diferentes.
+     * NÃO usar no dedupe — só para regras de categoria. Tem de ser idêntica à versão
+     * do frontend (categoryKey em statementParser.js).
+     */
+    static String categoryKey(String description) {
+        if (description == null) return "";
+        return description.toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("\\d+", " ")            // referências, datas, valores
+                .replaceAll("[^\\p{L}\\s]", " ")    // pontuação e símbolos
+                .replaceAll("\\s+", " ").trim();    // colapsa espaços
     }
 
     private static String dedupeKey(LocalDate date, BigDecimal amount, boolean inflow, String description) {

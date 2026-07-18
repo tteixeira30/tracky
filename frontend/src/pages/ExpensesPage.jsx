@@ -4,7 +4,7 @@ import Modal, { ConfirmDialog } from '../components/Modal'
 import DatePicker from '../components/DatePicker'
 import Dropdown from '../components/Dropdown'
 import { useToast } from '../components/Toast'
-import { analyzeStatement, analyzeRows, buildTransactions } from '../statementParser'
+import { analyzeStatement, analyzeRows, buildTransactions, categoryKey } from '../statementParser'
 import {
   IconBank, IconReceipt, IconUpload, IconPlus, IconPencil, IconWallet,
   IconChevronLeft, IconChevronRight, IconArrowUp, IconArrowDown, IconCoins,
@@ -223,7 +223,7 @@ export default function ExpensesPage() {
     const result = buildTransactions(importFile.analysis.dataRows, mapping, importFile.analysis.dateHint, importFile.analysis.openingBalance)
     if (categoryRules) {
       for (const r of result.rows) {
-        const ruled = categoryRules[r.description.trim().toLowerCase().replace(/\s+/g, ' ')]
+        const ruled = categoryRules[categoryKey(r.description)]
         if (ruled) r.category = ruled
       }
     }

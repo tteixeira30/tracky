@@ -7,7 +7,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -30,10 +29,6 @@ public class User {
     @Column(length = 3)
     private String baseCurrency = "EUR";
 
-    /** Saldo atual em conta (EUR) — ponto de partida da previsão de saldo do calendário. */
-    @Column(precision = 19, scale = 2)
-    private BigDecimal currentBalance;
-
     private Instant createdAt = Instant.now();
 
     public Long getId() { return id; }
@@ -45,7 +40,5 @@ public class User {
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public String getBaseCurrency() { return baseCurrency == null ? "EUR" : baseCurrency; }
     public void setBaseCurrency(String baseCurrency) { this.baseCurrency = baseCurrency; }
-    public BigDecimal getCurrentBalance() { return currentBalance; }
-    public void setCurrentBalance(BigDecimal currentBalance) { this.currentBalance = currentBalance; }
     public Instant getCreatedAt() { return createdAt; }
 }
