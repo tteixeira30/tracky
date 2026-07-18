@@ -4,7 +4,7 @@ import Modal, { ConfirmDialog } from '../components/Modal'
 import DatePicker from '../components/DatePicker'
 import Dropdown from '../components/Dropdown'
 import { useToast } from '../components/Toast'
-import { analyzeStatement, buildTransactions } from '../statementParser'
+import { analyzeStatement, analyzeRows, buildTransactions } from '../statementParser'
 import {
   IconBank, IconReceipt, IconUpload, IconPlus, IconPencil, IconWallet,
   IconChevronLeft, IconChevronRight, IconArrowUp, IconArrowDown, IconCoins,
@@ -169,8 +169,18 @@ export default function ExpensesPage() {
     e.target.value = ''
     if (!file) return
     try {
-      const text = await file.text()
-      const analysis = analyzeStatement(text)
+      let analysis
+      if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
+        const { extractPdfRows } = await import('../pdfStatement')
+        const { rows, hasText } = await extractPdfRows(await file.arrayBuffer())
+        if (!hasText) {
+          toast.error('PDF digitalizado', 'Este PDF não tem texto (é uma imagem). Usa o PDF original do banco ou exporta em CSV.')
+          return
+        }
+        analysis = analyzeRows(rows)
+      } else {
+        analysis = analyzeStatement(await file.text())
+      }
       if (!analysis || analysis.dataRows.length === 0) {
         toast.error('Ficheiro vazio', 'Não foram encontradas linhas de movimentos no ficheiro.')
         return
@@ -178,7 +188,7 @@ export default function ExpensesPage() {
       setImportFile({ name: file.name, analysis })
       setMapping(analysis.mapping)
     } catch {
-      toast.error('Erro ao ler', 'Não foi possível ler o ficheiro. Exporta o extrato em formato CSV.')
+      toast.error('Erro ao ler', 'Não foi possível ler o ficheiro. Usa o extrato em CSV ou PDF do banco.')
     }
   }
 
@@ -454,7 +464,7 @@ export default function ExpensesPage() {
       {/* ---------- modal importação ---------- */}
       <Modal open={importModal} onClose={() => setImportModal(false)}
              title="Importar extrato bancário"
-             subtitle="Exporta o extrato do teu banco em CSV e carrega-o aqui. Movimentos duplicados são ignorados automaticamente."
+             subtitle="Exporta o extrato do teu banco em CSV ou PDF e carrega-o aqui. Movimentos duplicados são ignorados automaticamente."
              footer={
                <>
                  <button className="btn ghost" onClick={() => setImportModal(false)}>Cancelar</button>
@@ -470,8 +480,8 @@ export default function ExpensesPage() {
                       options={data.accounts.map((a) => ({ value: String(a.id), label: a.name }))} />
           </div>
           <div className="field">
-            <label>Ficheiro (CSV)</label>
-            <input ref={fileRef} type="file" accept=".csv,.txt,text/csv" style={{ display: 'none' }} onChange={onFile} />
+            <label>Ficheiro (CSV ou PDF)</label>
+            <input ref={fileRef} type="file" accept=".csv,.txt,.pdf,text/csv,application/pdf" style={{ display: 'none' }} onChange={onFile} />
             <button className="btn ghost" style={{ width: '100%' }} onClick={() => fileRef.current?.click()}>
               <IconUpload size={14} /> {importFile ? importFile.name : 'Escolher ficheiro…'}
             </button>

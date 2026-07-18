@@ -108,17 +108,21 @@ export function autoCategory(description, inflow) {
 
 // ---------- Deteção de formato / mapeamento ----------
 
-const HEADER_HINTS = /data|date|descri|description|montante|amount|valor|d[eé]bito|debit|cr[eé]dito|credit|movimento|saldo|balance|currency|moeda/i
+export const HEADER_HINTS = /data|date|descri|description|montante|amount|valor|d[eé]bito|debit|cr[eé]dito|credit|movimento|saldo|balance|currency|moeda/i
 
 /**
  * Analisa um CSV de extrato: encontra a linha de cabeçalho, deteta o formato e
  * propõe um mapeamento de colunas. Devolve { format, headers, dataRows, mapping }.
- * mapping: índices { date, description, amount, debit, credit, currency, state, fee }
+ * mapping: índices { date, description, amount, debit, credit, currency, state, fee, balance }
  * (amount OU debit/credit; -1 = coluna inexistente).
  */
 export function analyzeStatement(text) {
-  const rows = parseCsv(text)
-  if (rows.length === 0) return null
+  return analyzeRows(parseCsv(text))
+}
+
+/** Variante de analyzeStatement para linhas já estruturadas (ex.: extraídas de um PDF). */
+export function analyzeRows(rows) {
+  if (!rows || rows.length === 0) return null
 
   let headerIdx = -1
   for (let i = 0; i < Math.min(rows.length, 12); i++) {
@@ -135,6 +139,7 @@ export function analyzeStatement(text) {
   const mapping = {
     date: -1, description: -1, amount: -1, debit: -1, credit: -1,
     currency: find(/^currency$|^moeda$/), state: find(/^state$|^estado$/), fee: find(/^fee$|^comiss/),
+    balance: find(/saldo|balance/),
   }
 
   let format = 'generic'
@@ -147,7 +152,7 @@ export function analyzeStatement(text) {
     mapping.description = find(/^description$|^descri/)
     mapping.amount = find(/^amount$|^montante$/)
   } else {
-    mapping.date = find(/data.*(operac|mov|lan[çc])/) !== -1 ? find(/data.*(operac|mov|lan[çc])/) : find(/^data\b|date/)
+    mapping.date = find(/data.*(opera|mov|lan[çc])/) !== -1 ? find(/data.*(opera|mov|lan[çc])/) : find(/^data\b|date/)
     mapping.description = find(/descri|description|movimento|detalhe|details?|narrative|memo|referência|referencia|concept/)
     mapping.debit = find(/d[eé]bito|debit(?!\s*card)/)
     mapping.credit = find(/cr[eé]dito|credit(?!\s*card)/)
@@ -155,7 +160,7 @@ export function analyzeStatement(text) {
       mapping.debit = -1; mapping.credit = -1
       mapping.amount = find(/montante|^amount$|^valor\b|import[aâ]ncia|^value/)
     }
-    if (find(/santander/) !== -1 || /santander/i.test(text.slice(0, 400))) format = 'santander'
+    if (find(/santander/) !== -1 || rows.slice(0, 6).some((r) => r.some((c) => /santander/i.test(c)))) format = 'santander'
   }
 
   if (mapping.date === -1 || mapping.description === -1 || (mapping.amount === -1 && mapping.debit === -1)) {
@@ -165,7 +170,7 @@ export function analyzeStatement(text) {
 }
 
 function emptyMapping() {
-  return { date: -1, description: -1, amount: -1, debit: -1, credit: -1, currency: -1, state: -1, fee: -1 }
+  return { date: -1, description: -1, amount: -1, debit: -1, credit: -1, currency: -1, state: -1, fee: -1, balance: -1 }
 }
 
 /**
@@ -205,13 +210,61 @@ export function buildTransactions(dataRows, mapping) {
     }
     if (value == null || value === 0) { ignored++; continue }
 
-    const inflow = value > 0
     out.push({
-      date, description,
-      amount: Math.round(Math.abs(value) * 100) / 100,
-      inflow,
-      category: autoCategory(description, inflow),
+      date, description, value,
+      balance: mapping.balance !== -1 ? parseAmount(cells[mapping.balance]) : null,
     })
   }
-  return { rows: out, ignored }
+
+  // Extratos sem sinal no montante (comum em PDF): infere entrada/saída pela evolução do saldo.
+  if (mapping.amount !== -1 && mapping.balance !== -1 && out.length >= 2 && !out.some((r) => r.value < 0)) {
+    const signs = inferSignsFromBalance(out)
+    if (signs) for (let i = 0; i < out.length; i++) {
+      if (signs[i] !== 0) out[i].value = signs[i] * Math.abs(out[i].value)
+    }
+  }
+
+  return {
+    rows: out.map((r) => {
+      const inflow = r.value > 0
+      return {
+        date: r.date, description: r.description,
+        amount: Math.round(Math.abs(r.value) * 100) / 100,
+        inflow,
+        category: autoCategory(r.description, inflow),
+      }
+    }),
+    ignored,
+  }
+}
+
+/**
+ * Dado [{value (abs), balance}], tenta deduzir o sinal de cada movimento comparando
+ * saldos consecutivos, nas duas ordens possíveis (mais antigo primeiro / mais recente
+ * primeiro). Devolve um array de -1/0/+1, ou null se os saldos não forem consistentes.
+ */
+function inferSignsFromBalance(entries) {
+  const n = entries.length
+  let best = null, bestScore = -1
+  let comparable = 0
+  for (const dir of [1, -1]) {
+    const signs = new Array(n).fill(0)
+    let score = 0
+    let pairs = 0
+    for (let i = 0; i < n - 1; i++) {
+      // dir=1: ordem cronológica (saldo[i+1] = saldo[i] ± valor[i+1]); dir=-1: mais recente primeiro
+      const [prev, next, j] = dir === 1 ? [entries[i], entries[i + 1], i + 1] : [entries[i + 1], entries[i], i]
+      if (prev.balance == null || next.balance == null) continue
+      pairs++
+      const delta = next.balance - prev.balance
+      const amt = Math.abs(entries[j].value)
+      if (Math.abs(delta - amt) < 0.015) { signs[j] = 1; score++ }
+      else if (Math.abs(delta + amt) < 0.015) { signs[j] = -1; score++ }
+    }
+    comparable = Math.max(comparable, pairs)
+    if (score > bestScore) { bestScore = score; best = signs }
+  }
+  // só aceita se a grande maioria dos pares consecutivos bater certo
+  if (comparable === 0 || bestScore < Math.max(1, Math.ceil(comparable * 0.6))) return null
+  return best
 }
