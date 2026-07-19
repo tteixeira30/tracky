@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import {
+  AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from 'recharts'
 import { api, fmtEur, fmtPct, fmtMoneyShort } from '../api'
+import { catLabel, catColor } from '../categories'
 import { useAuth } from '../components/AuthContext'
 import { useChartColors } from '../components/ThemeContext'
 import {
   IconWallet, IconTrendingUp, IconTarget, IconCheck, IconInfo,
-  IconSparkle, IconCoins, IconActivity, IconArrowUp, IconArrowDown, IconCalendar,
+  IconSparkle, IconCoins, IconActivity, IconArrowUp, IconArrowDown, IconCalendar, IconReceipt,
 } from '../components/Icons'
 
 const INSIGHT_ICONS = {
@@ -41,6 +44,42 @@ function fmtMonth(m) {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
+// "2026-07" -> "jul" (rótulo curto para o eixo do gráfico de barras)
+function shortMonth(m) {
+  const [y, mo] = m.split('-').map(Number)
+  return new Date(y, mo - 1, 1).toLocaleDateString('pt-PT', { month: 'short' }).replace('.', '')
+}
+
+// Barras de categoria (partilhadas entre a vista de 12 meses e o detalhe de um mês).
+function CatBars({ items, total }) {
+  return items.map((c) => {
+    const pct = total > 0 ? (Number(c.total) / total) * 100 : 0
+    return (
+      <li key={c.category}>
+        <div className="cat-bar-head">
+          <span><span className="tx-cat-dot" style={{ background: catColor(c.category) }} /> {catLabel(c.category)}</span>
+          <span>{fmtEur(c.total)} · {pct.toFixed(0)}%</span>
+        </div>
+        <div className="cat-bar-track">
+          <div className="cat-bar-fill" style={{ width: `${pct}%`, background: catColor(c.category) }} />
+        </div>
+      </li>
+    )
+  })
+}
+
+function ExpensesTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const p = payload[0].payload
+  return (
+    <div className="chart-tooltip">
+      <div className="tt-label">{fmtMonth(p.month)}</div>
+      <div className="tt-value">{fmtEur(p.outflows)}</div>
+      {Number(p.inflows) > 0 && <div className="tt-sub">Entradas: {fmtEur(p.inflows)}</div>}
+    </div>
+  )
+}
+
 function timeAgo(iso) {
   const then = new Date(iso).getTime()
   const days = Math.floor((Date.now() - then) / 86400000)
@@ -59,6 +98,7 @@ export default function DashboardPage() {
   const chart = useChartColors()
   const [data, setData] = useState(null)
   const [error, setError] = useState(false)
+  const [selectedMonth, setSelectedMonth] = useState(null) // mês em foco no gráfico de despesas
 
   useEffect(() => {
     api.getDashboard().then(setData).catch(() => setError(true))
@@ -108,6 +148,21 @@ export default function DashboardPage() {
   const savedPct = compTotal > 0 ? (saved / compTotal) * 100 : 0
 
   const goalsPct = Math.max(0, Math.min(100, Number(data.goalsProgressPercent) || 0))
+
+  // estatísticas de despesas (últimos 12 meses)
+  const exp = data.expenses
+  const expMonths = (exp?.months || []).map((m) => ({ ...m, outflows: Number(m.outflows), inflows: Number(m.inflows) }))
+  const currentKey = expMonths.length ? expMonths[expMonths.length - 1].month : null
+  const spent = Number(exp?.currentMonthOutflows) || 0
+  const prevSpent = Number(exp?.prevMonthOutflows) || 0
+  const spentDeltaPct = prevSpent > 0 ? ((spent - prevSpent) / prevSpent) * 100 : null
+  const spentUp = spent >= prevSpent
+  const expTotalOut = Number(exp?.yearOutflows) || 0
+  const topCats = exp?.topCategories || []
+
+  // mês em foco (drill-down do gráfico); highlight segue a seleção, senão o mês atual
+  const selMonth = selectedMonth ? expMonths.find((m) => m.month === selectedMonth) : null
+  const highlightKey = selectedMonth || currentKey
 
   return (
     <div>
@@ -239,6 +294,96 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {exp && (
+        <div className="card exp-card">
+          <div className="card-header">
+            <div>
+              <h3><IconReceipt size={16} /> Despesas ao longo do ano</h3>
+              <div className="sub">Últimos 12 meses{exp.hasData ? ' · clica num mês para ver o detalhe' : ''}</div>
+            </div>
+            <div className="exp-stats">
+              <div className="exp-stat">
+                <span className="exp-stat-label">Este mês</span>
+                <strong className="neg">{fmtEur(spent)}</strong>
+                {spentDeltaPct != null && (
+                  <span className={`delta-chip mini ${spent === prevSpent ? 'flat' : spentUp ? 'down' : 'up'}`}>
+                    {spentUp ? <IconArrowUp size={11} /> : <IconArrowDown size={11} />}
+                    {`${spentUp ? '+' : '−'}${Math.abs(spentDeltaPct).toFixed(0)}%`}
+                  </span>
+                )}
+              </div>
+              <div className="exp-stat">
+                <span className="exp-stat-label">Média mensal</span>
+                <strong>{fmtEur(exp.avgMonthlyOutflows)}</strong>
+              </div>
+              <div className="exp-stat">
+                <span className="exp-stat-label">Total 12 meses</span>
+                <strong>{fmtEur(exp.yearOutflows)}</strong>
+              </div>
+            </div>
+          </div>
+
+          {!exp.hasData ? (
+            <div className="empty-state compact">
+              <div className="empty-icon"><IconReceipt size={22} /></div>
+              <h4>Sem despesas registadas</h4>
+              <p>Adiciona movimentos ou importa extratos na página <strong>Despesas</strong> para veres as estatísticas.</p>
+            </div>
+          ) : (
+            <div className="exp-body">
+              <div className="exp-chart">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={expMonths} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={chart.grid} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" stroke={chart.axis} fontSize={11.5} tickMargin={8} axisLine={false} tickLine={false}
+                           tickFormatter={shortMonth} interval="preserveStartEnd" />
+                    <YAxis stroke={chart.axis} fontSize={11.5} axisLine={false} tickLine={false} width={64}
+                           tickFormatter={fmtMoneyShort} />
+                    <Tooltip cursor={{ fill: 'var(--surface-2)' }} content={<ExpensesTooltip />} />
+                    <Bar dataKey="outflows" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false}
+                         cursor="pointer"
+                         onClick={(d) => d?.month && setSelectedMonth((cur) => (cur === d.month ? null : d.month))}>
+                      {expMonths.map((m) => (
+                        <Cell key={m.month} fill={m.month === highlightKey ? 'var(--accent)' : 'var(--surface-3)'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="exp-cats">
+                {selMonth ? (
+                  <>
+                    <div className="exp-cats-head spread">
+                      <span>{fmtMonth(selMonth.month)}</span>
+                      <button type="button" className="exp-back" onClick={() => setSelectedMonth(null)}>‹ 12 meses</button>
+                    </div>
+                    <div className="exp-month-totals">
+                      <span><span className="exp-stat-label">Saídas</span><strong className="neg">{fmtEur(selMonth.outflows)}</strong></span>
+                      <span><span className="exp-stat-label">Entradas</span><strong className="pos">{fmtEur(selMonth.inflows)}</strong></span>
+                    </div>
+                    {selMonth.byCategory.length === 0 ? (
+                      <p className="dim" style={{ padding: '4px 2px' }}>Sem despesas neste mês.</p>
+                    ) : (
+                      <ul className="cat-bars"><CatBars items={selMonth.byCategory} total={Number(selMonth.outflows)} /></ul>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="exp-cats-head">Principais categorias <span className="dim">· 12 meses</span></div>
+                    {topCats.length === 0 ? (
+                      <p className="dim" style={{ padding: '4px 2px' }}>Sem saídas por categoria.</p>
+                    ) : (
+                      <ul className="cat-bars"><CatBars items={topCats} total={expTotalOut} /></ul>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="dash-grid">
         <div className="card dash-side">

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { IconCalendar, IconChevronLeft, IconChevronRight } from './Icons'
 
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
@@ -24,17 +25,48 @@ const fmtMonth = (view) => {
 export default function DatePicker({ value, onChange, placeholder = 'Seleciona a data' }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => (value || todayIso()).slice(0, 7))
+  const [pos, setPos] = useState(null)
   const ref = useRef(null)
+  const popRef = useRef(null)
+
+  // Posiciona o popover em coordenadas fixas (via portal) para não ser cortado
+  // pelo overflow do modal — flutua por cima em vez de empurrar o conteúdo.
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      const el = ref.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const POP_W = popRef.current?.offsetWidth || 260
+      const POP_H = popRef.current?.offsetHeight || 330
+      const GAP = 6
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - POP_W - 8))
+      let top = r.bottom + GAP
+      if (top + POP_H > window.innerHeight - 8 && r.top - GAP - POP_H > 8) top = r.top - GAP - POP_H
+      setPos({ top, left })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDown = (e) => {
+      if (ref.current?.contains(e.target)) return
+      if (popRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
   const toggle = () => {
-    if (!open) setView((value || todayIso()).slice(0, 7))
+    if (!open) { setView((value || todayIso()).slice(0, 7)); setPos(null) }
     setOpen((o) => !o)
   }
   const shift = (delta) => {
@@ -61,8 +93,9 @@ export default function DatePicker({ value, onChange, placeholder = 'Seleciona a
         <IconCalendar size={16} />
       </button>
 
-      {open && (
-        <div className="dp-pop">
+      {open && createPortal(
+        <div className="dp-pop" ref={popRef}
+             style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, visibility: pos ? 'visible' : 'hidden' }}>
           <div className="dp-head">
             <button type="button" className="icon-btn" onClick={() => shift(-1)} aria-label="Mês anterior"><IconChevronLeft size={17} /></button>
             <span className="dp-month">{fmtMonth(view)}</span>
@@ -86,7 +119,8 @@ export default function DatePicker({ value, onChange, placeholder = 'Seleciona a
             <button type="button" onClick={() => { onChange(''); setOpen(false) }}>Limpar</button>
             <button type="button" onClick={() => { const t = todayIso(); onChange(t); setView(t.slice(0, 7)); setOpen(false) }}>Hoje</button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

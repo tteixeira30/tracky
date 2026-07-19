@@ -1,7 +1,8 @@
 package com.tracky.calendar;
 
 import com.tracky.auth.User;
-import com.tracky.auth.UserRepository;
+import com.tracky.expense.Account;
+import com.tracky.expense.AccountRepository;
 import com.tracky.goal.GoalRepository;
 import com.tracky.investment.InvestmentRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,14 +36,14 @@ class CalendarControllerForecastTest {
     @Mock CalendarEventRepository eventRepo;
     @Mock InvestmentRepository investmentRepo;
     @Mock GoalRepository goalRepo;
-    @Mock UserRepository userRepo;
+    @Mock AccountRepository accountRepo;
 
     CalendarController controller;
     User user;
 
     @BeforeEach
     void setUp() {
-        controller = new CalendarController(eventRepo, investmentRepo, goalRepo, userRepo);
+        controller = new CalendarController(eventRepo, investmentRepo, goalRepo, accountRepo);
         user = mock(User.class);
         lenient().when(user.getId()).thenReturn(1L);
         lenient().when(investmentRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
@@ -67,11 +68,20 @@ class CalendarControllerForecastTest {
                 new BigDecimal("100"), freq, day, date, null);
     }
 
+    private Account account(String balance) {
+        Account a = new Account();
+        a.setUserId(1L);
+        a.setName("Conta");
+        a.setCurrentBalance(new BigDecimal(balance));
+        return a;
+    }
+
     // ---------- upcoming / forecast ----------
 
     @Test
     void upcomingSemSaldoDefinidoNaoTemSaldoInicial() {
-        when(user.getCurrentBalance()).thenReturn(null);
+        // nenhuma conta com saldo definido → sem previsão de saldo
+        when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
         when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
 
         var resp = controller.upcoming(user, 60);
@@ -83,7 +93,8 @@ class CalendarControllerForecastTest {
 
     @Test
     void upcomingAcumulaOSaldoAoLongoDasOcorrencias() {
-        when(user.getCurrentBalance()).thenReturn(new BigDecimal("1000"));
+        // saldo inicial = soma dos saldos das contas bancárias (funcionalidade de despesas)
+        when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(account("1000")));
         // um evento mensal de entrada garante pelo menos uma ocorrência no horizonte
         when(eventRepo.findByUserIdOrderByIdAsc(1L))
                 .thenReturn(List.of(monthly("Salário", LocalDate.now().getDayOfMonth(), true, "500")));
@@ -99,23 +110,12 @@ class CalendarControllerForecastTest {
 
     @Test
     void upcomingLimitaOHorizonteEntre7E365Dias() {
-        when(user.getCurrentBalance()).thenReturn(null);
+        when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
         when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
 
         assertThat(controller.upcoming(user, 2).days()).isEqualTo(7);     // mínimo
         assertThat(controller.upcoming(user, 999).days()).isEqualTo(365); // máximo
         assertThat(controller.upcoming(user, 90).days()).isEqualTo(90);
-    }
-
-    @Test
-    void setBalanceGuardaOSaldoEDevolveAPrevisao() {
-        when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
-
-        var resp = controller.setBalance(user, new CalendarController.BalanceRequest(new BigDecimal("2500")));
-
-        verify(user).setCurrentBalance(new BigDecimal("2500"));
-        verify(userRepo).save(user);
-        assertThat(resp.days()).isEqualTo(60);
     }
 
     // ---------- CRUD ----------

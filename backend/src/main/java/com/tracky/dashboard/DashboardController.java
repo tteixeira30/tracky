@@ -1,6 +1,7 @@
 package com.tracky.dashboard;
 
 import com.tracky.auth.User;
+import com.tracky.expense.ExpenseController;
 import com.tracky.goal.Goal;
 import com.tracky.goal.GoalController;
 import com.tracky.goal.GoalRepository;
@@ -34,15 +35,17 @@ public class DashboardController {
     private final IncomeController incomeController;
     private final InvestmentController investmentController;
     private final GoalController goalController;
+    private final ExpenseController expenseController;
     private final InvestmentRepository investmentRepo;
     private final GoalRepository goalRepo;
 
     public DashboardController(IncomeController incomeController, InvestmentController investmentController,
-                              GoalController goalController, InvestmentRepository investmentRepo,
-                              GoalRepository goalRepo) {
+                              GoalController goalController, ExpenseController expenseController,
+                              InvestmentRepository investmentRepo, GoalRepository goalRepo) {
         this.incomeController = incomeController;
         this.investmentController = investmentController;
         this.goalController = goalController;
+        this.expenseController = expenseController;
         this.investmentRepo = investmentRepo;
         this.goalRepo = goalRepo;
     }
@@ -64,6 +67,7 @@ public class DashboardController {
             int goalsCount,
             int goalsCompleted,
             List<InvestmentController.PortfolioPoint> evolution,
+            ExpenseController.ExpenseStats expenses,
             List<Activity> recentActivity,
             List<Insight> insights) {}
 
@@ -72,6 +76,7 @@ public class DashboardController {
         IncomeController.IncomeResponse income = incomeController.get(user, null);
         InvestmentController.PortfolioResponse portfolio = investmentController.list(user);
         List<GoalController.GoalDto> goals = goalController.list(user);
+        ExpenseController.ExpenseStats expenses = expenseController.stats(user);
 
         InvestmentController.Summary inv = portfolio.summary();
 
@@ -111,8 +116,9 @@ public class DashboardController {
                 goals.size(),
                 completed,
                 evolution,
+                expenses,
                 recentActivity(user),
-                insights(user, income, inv, goals));
+                insights(user, income, inv, goals, expenses));
     }
 
     /** Atividade recente a partir das datas de criação de investimentos e objetivos. */
@@ -132,8 +138,25 @@ public class DashboardController {
     }
 
     private List<Insight> insights(User user, IncomeController.IncomeResponse income,
-                                   InvestmentController.Summary inv, List<GoalController.GoalDto> goals) {
+                                   InvestmentController.Summary inv, List<GoalController.GoalDto> goals,
+                                   ExpenseController.ExpenseStats expenses) {
         List<Insight> out = new ArrayList<>();
+
+        // despesas do mês vs mês anterior (só quando há histórico para comparar)
+        BigDecimal spent = expenses.currentMonthOutflows(), prevSpent = expenses.prevMonthOutflows();
+        if (spent != null && prevSpent != null && prevSpent.signum() > 0) {
+            BigDecimal diff = spent.subtract(prevSpent);
+            BigDecimal pct = diff.abs().multiply(HUNDRED).divide(prevSpent, 0, RoundingMode.HALF_UP);
+            if (diff.signum() > 0) {
+                out.add(new Insight("warning", "trending",
+                        "Despesas a subir",
+                        "Este mês já gastaste mais " + fmtEur(diff) + " (+" + pct + "%) que no mês anterior."));
+            } else if (diff.signum() < 0) {
+                out.add(new Insight("positive", "trending",
+                        "Despesas a descer",
+                        "Este mês gastaste menos " + fmtEur(diff.abs()) + " (−" + pct + "%) que no mês anterior."));
+            }
+        }
 
         // desempenho do portefólio
         if (inv.totalInvested().signum() > 0) {

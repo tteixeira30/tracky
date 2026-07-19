@@ -246,6 +246,50 @@ export const IconMoon = (p) => (
   </Icon>
 )
 
+export const IconEye = (p) => (
+  <Icon {...p}>
+    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icon>
+)
+
+export const IconEyeOff = (p) => (
+  <Icon {...p}>
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </Icon>
+)
+
+export const IconReceipt = (p) => (
+  <Icon {...p}>
+    <path d="M4 3v18l2-1.5L8 21l2-1.5L12 21l2-1.5L16 21l2-1.5L20 21V3l-2 1.5L16 3l-2 1.5L12 3l-2 1.5L8 3 6 4.5 4 3Z" />
+    <path d="M8 9h8" />
+    <path d="M8 13h5" />
+  </Icon>
+)
+
+export const IconUpload = (p) => (
+  <Icon {...p}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </Icon>
+)
+
+export const IconBank = (p) => (
+  <Icon {...p}>
+    <path d="M3 21h18" />
+    <path d="M4 18h16" />
+    <path d="M6 18v-7" />
+    <path d="M10 18v-7" />
+    <path d="M14 18v-7" />
+    <path d="M18 18v-7" />
+    <path d="M12 3 3 8h18L12 3Z" />
+  </Icon>
+)
+
 export const IconLogo = (p) => (
   <svg width={p?.size ?? 30} height={p?.size ?? 30} viewBox="0 0 64 64">
     <defs>

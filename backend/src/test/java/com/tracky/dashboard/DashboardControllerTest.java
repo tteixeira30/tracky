@@ -1,6 +1,7 @@
 package com.tracky.dashboard;
 
 import com.tracky.auth.User;
+import com.tracky.expense.ExpenseController;
 import com.tracky.goal.Goal;
 import com.tracky.goal.GoalController;
 import com.tracky.goal.GoalRepository;
@@ -37,6 +38,7 @@ class DashboardControllerTest {
     @Mock IncomeController incomeController;
     @Mock InvestmentController investmentController;
     @Mock GoalController goalController;
+    @Mock ExpenseController expenseController;
     @Mock InvestmentRepository investmentRepo;
     @Mock GoalRepository goalRepo;
 
@@ -46,9 +48,16 @@ class DashboardControllerTest {
     @BeforeEach
     void setUp() {
         controller = new DashboardController(incomeController, investmentController,
-                goalController, investmentRepo, goalRepo);
+                goalController, expenseController, investmentRepo, goalRepo);
         user = org.mockito.Mockito.mock(User.class);
         lenient().when(user.getId()).thenReturn(1L);
+        // stats() é sempre invocado pelo get(); sem despesas → não gera insight de despesas
+        lenient().when(expenseController.stats(user)).thenReturn(emptyExpenseStats());
+    }
+
+    private ExpenseController.ExpenseStats emptyExpenseStats() {
+        return new ExpenseController.ExpenseStats(List.of(), BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(), false);
     }
 
     private IncomeController.IncomeResponse income(String month, BigDecimal monthly, BigDecimal unallocated,

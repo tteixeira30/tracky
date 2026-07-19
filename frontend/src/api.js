@@ -45,7 +45,6 @@ export const api = {
   addCalendarEvent: (data) => request('/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
   updateCalendarEvent: (id, data) => request(`/calendar/events/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCalendarEvent: (id) => request(`/calendar/events/${id}`, { method: 'DELETE' }),
-  setBalance: (balance) => request('/calendar/balance', { method: 'PUT', body: JSON.stringify({ balance }) }),
 
   // Moeda
   getCurrency: () => request('/currency'),
@@ -89,7 +88,33 @@ export const api = {
   updateGoal: (id, data) => request(`/goals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   contributeGoal: (id, amount) => request(`/goals/${id}/contribute`, { method: 'POST', body: JSON.stringify({ amount }) }),
   deleteGoal: (id) => request(`/goals/${id}`, { method: 'DELETE' }),
+
+  // Despesas e contas correntes
+  getExpenses: (month, accountId) => {
+    const q = new URLSearchParams()
+    if (month) q.set('month', month)
+    if (accountId) q.set('accountId', accountId)
+    const s = q.toString()
+    return request(`/expenses${s ? `?${s}` : ''}`)
+  },
+  addExpenseAccount: (data) => request('/expenses/accounts', { method: 'POST', body: JSON.stringify(data) }),
+  updateExpenseAccount: (id, data) => request(`/expenses/accounts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteExpenseAccount: (id) => request(`/expenses/accounts/${id}`, { method: 'DELETE' }),
+  addTransaction: (data) => request('/expenses/transactions', { method: 'POST', body: JSON.stringify(data) }),
+  updateTransaction: (id, data) => request(`/expenses/transactions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTransaction: (id) => request(`/expenses/transactions/${id}`, { method: 'DELETE' }),
+  importTransactions: (data) => request('/expenses/import', { method: 'POST', body: JSON.stringify(data) }),
+  getCategoryRules: () => request('/expenses/rules'),
 }
+
+// ---------- Modo privacidade ----------
+// Quando ativo, todos os valores monetários formatados aparecem mascarados.
+// As percentagens e contagens continuam visíveis (padrão das apps bancárias).
+let privacyMode = false
+const PRIVACY_MASK = '••••'
+
+export const setPrivacyMode = (on) => { privacyMode = !!on }
+export const getPrivacyMode = () => privacyMode
 
 // ---------- Moeda de apresentação ----------
 // O backend devolve sempre valores em EUR; aqui convertem-se para a moeda base
@@ -126,12 +151,16 @@ export const fromEur = (eurValue) => {
 }
 
 /** Formata um valor em EUR, convertido e apresentado na moeda base. */
-export const fmtEur = (v) =>
-  v == null ? '—' : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: displayCurrency }).format(v * displayRate)
+export const fmtEur = (v) => {
+  if (v == null) return '—'
+  if (privacyMode) return PRIVACY_MASK
+  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: displayCurrency }).format(v * displayRate)
+}
 
 /** Versão curta (sem casas decimais) para eixos de gráficos, na moeda base. */
 export const fmtMoneyShort = (v) => {
   if (v == null) return ''
+  if (privacyMode) return PRIVACY_MASK
   const parts = new Intl.NumberFormat('pt-PT', {
     style: 'currency', currency: displayCurrency, maximumFractionDigits: 0,
   }).formatToParts(v * displayRate)

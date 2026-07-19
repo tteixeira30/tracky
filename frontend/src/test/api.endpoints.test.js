@@ -30,9 +30,6 @@ describe('endpoints da API', () => {
 
     const del = await call(() => api.deleteCalendarEvent(5))
     expect(del).toMatchObject({ url: '/api/calendar/events/5', method: 'DELETE' })
-
-    const bal = await call(() => api.setBalance(1500))
-    expect(bal).toMatchObject({ url: '/api/calendar/balance', method: 'PUT', body: { balance: 1500 } })
   })
 
   it('moeda: leitura e alteração', async () => {

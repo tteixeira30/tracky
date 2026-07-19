@@ -2,6 +2,7 @@ package com.tracky.achievements;
 
 import com.tracky.auth.User;
 import com.tracky.calendar.CalendarEventRepository;
+import com.tracky.expense.AccountRepository;
 import com.tracky.goal.GoalController;
 import com.tracky.income.IncomeController;
 import com.tracky.investment.Investment;
@@ -33,15 +34,18 @@ public class AchievementsController {
     private final InvestmentController investmentController;
     private final GoalController goalController;
     private final CalendarEventRepository calendarRepo;
+    private final AccountRepository accountRepo;
 
     public AchievementsController(IncomeController incomeController,
                                   InvestmentController investmentController,
                                   GoalController goalController,
-                                  CalendarEventRepository calendarRepo) {
+                                  CalendarEventRepository calendarRepo,
+                                  AccountRepository accountRepo) {
         this.incomeController = incomeController;
         this.investmentController = investmentController;
         this.goalController = goalController;
         this.calendarRepo = calendarRepo;
+        this.accountRepo = accountRepo;
     }
 
     public record Achievement(String id, String category, String title, String description, String icon,
@@ -80,7 +84,10 @@ public class AchievementsController {
         double netWorth = portfolio.summary().totalCurrent().doubleValue() + saved;
 
         long calendarEvents = calendarRepo.countByUserId(user.getId());
-        boolean hasBalance = user.getCurrentBalance() != null;
+        // saldo definido = pelo menos uma conta bancária (despesas) com saldo atribuído;
+        // é a partir daí que o calendário calcula a previsão de saldo
+        boolean hasBalance = accountRepo.findByUserIdOrderByIdAsc(user.getId()).stream()
+                .anyMatch(acc -> acc.getCurrentBalance() != null);
 
         List<Achievement> a = new ArrayList<>();
 
@@ -154,7 +161,7 @@ public class AchievementsController {
 
         // Planeamento
         a.add(flag("plan-balance", "Planeamento", "Prevê o futuro",
-                "Define o teu saldo atual no calendário", "wallet", 10, hasBalance));
+                "Define o saldo atual de uma conta em Despesas", "wallet", 10, hasBalance));
         a.add(tier("plan-event1", "Planeamento", "Planeador",
                 "Cria o teu primeiro evento no calendário", "calendar", 10, calendarEvents, 1, "count"));
         a.add(tier("plan-event5", "Planeamento", "Organizador-mor",

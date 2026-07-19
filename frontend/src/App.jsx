@@ -4,17 +4,20 @@ import IncomePage from './pages/IncomePage'
 import InvestmentsPage from './pages/InvestmentsPage'
 import GoalsPage from './pages/GoalsPage'
 import CalendarPage from './pages/CalendarPage'
+import ExpensesPage from './pages/ExpensesPage'
 import AchievementsPage from './pages/AchievementsPage'
 import AuthPage from './pages/AuthPage'
 import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './components/AuthContext'
 import { ThemeProvider, useTheme } from './components/ThemeContext'
 import Dropdown from './components/Dropdown'
-import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconTrophy, IconLogout, IconSun, IconMoon } from './components/Icons'
+import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconReceipt, IconTrophy, IconLogout, IconSun, IconMoon, IconEye, IconEyeOff } from './components/Icons'
+import { setPrivacyMode } from './api'
 
 const TABS = [
   { id: 'dashboard', label: 'Painel', icon: IconGrid },
   { id: 'income', label: 'Rendimento', icon: IconWallet },
+  { id: 'expenses', label: 'Despesas', icon: IconReceipt },
   { id: 'investments', label: 'Investimentos', icon: IconTrendingUp },
   { id: 'goals', label: 'Objetivos', icon: IconTarget },
   { id: 'calendar', label: 'Calendário', icon: IconCalendar },
@@ -48,6 +51,18 @@ function ThemeToggle() {
 function Shell() {
   const { user, loading, logout, baseCurrency, changeCurrency } = useAuth()
   const [tab, setTab] = useState('dashboard')
+  const [privacy, setPrivacy] = useState(() => {
+    const on = localStorage.getItem('tracky_privacy') === '1'
+    setPrivacyMode(on)
+    return on
+  })
+
+  const togglePrivacy = () => {
+    const next = !privacy
+    setPrivacy(next)
+    setPrivacyMode(next)
+    localStorage.setItem('tracky_privacy', next ? '1' : '0')
+  }
 
   if (loading) {
     return (
@@ -93,6 +108,15 @@ function Shell() {
             <span>Aparência</span>
             <ThemeToggle />
           </div>
+          <div className="theme-select">
+            <span>Privacidade</span>
+            <button className="theme-toggle" onClick={togglePrivacy} role="switch" aria-checked={privacy}
+                    aria-label={privacy ? 'Mostrar valores' : 'Esconder valores'}
+                    title={privacy ? 'Mostrar valores' : 'Esconder valores'}>
+              <span className={`tt-opt ${privacy ? 'active' : ''}`}><IconEyeOff size={14} /></span>
+              <span className={`tt-opt ${!privacy ? 'active' : ''}`}><IconEye size={14} /></span>
+            </button>
+          </div>
           <div className="user-chip">
             <span className="user-avatar">{initials}</span>
             <div className="user-info">
@@ -109,9 +133,10 @@ function Shell() {
           </div>
         </div>
       </aside>
-      <main className="main" key={baseCurrency}>
+      <main className="main" key={`${baseCurrency}-${privacy ? 'p1' : 'p0'}`}>
         {tab === 'dashboard' && <DashboardPage />}
         {tab === 'income' && <IncomePage />}
+        {tab === 'expenses' && <ExpensesPage />}
         {tab === 'investments' && <InvestmentsPage />}
         {tab === 'goals' && <GoalsPage />}
         {tab === 'calendar' && <CalendarPage />}

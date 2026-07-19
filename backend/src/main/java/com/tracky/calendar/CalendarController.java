@@ -1,7 +1,8 @@
 package com.tracky.calendar;
 
 import com.tracky.auth.User;
-import com.tracky.auth.UserRepository;
+import com.tracky.expense.Account;
+import com.tracky.expense.AccountRepository;
 import com.tracky.goal.Goal;
 import com.tracky.goal.GoalRepository;
 import com.tracky.investment.Investment;
@@ -29,14 +30,14 @@ public class CalendarController {
     private final CalendarEventRepository repo;
     private final InvestmentRepository investmentRepo;
     private final GoalRepository goalRepo;
-    private final UserRepository userRepo;
+    private final AccountRepository accountRepo;
 
     public CalendarController(CalendarEventRepository repo, InvestmentRepository investmentRepo,
-                             GoalRepository goalRepo, UserRepository userRepo) {
+                             GoalRepository goalRepo, AccountRepository accountRepo) {
         this.repo = repo;
         this.investmentRepo = investmentRepo;
         this.goalRepo = goalRepo;
-        this.userRepo = userRepo;
+        this.accountRepo = accountRepo;
     }
 
     // ---------- DTOs ----------
@@ -57,7 +58,6 @@ public class CalendarController {
     public record EventRequest(@NotBlank String name, @NotNull CalendarEvent.Category category, boolean inflow,
                                @NotNull @Positive BigDecimal amount, @NotNull CalendarEvent.Frequency frequency,
                                Integer dayOfMonth, LocalDate eventDate, Boolean active) {}
-    public record BalanceRequest(BigDecimal balance) {}
 
     // ---------- endpoints ----------
 
@@ -89,16 +89,25 @@ public class CalendarController {
 
         List<Occurrence> occ = occurrencesBetween(user, from, to);
 
-        boolean hasBalance = user.getCurrentBalance() != null;
-        BigDecimal balance = hasBalance ? user.getCurrentBalance() : BigDecimal.ZERO;
+        // O ponto de partida da previsão é a soma dos saldos definidos nas contas
+        // bancárias (funcionalidade de despesas). Só há previsão de saldo quando
+        // pelo menos uma conta tem saldo definido; caso contrário mostra-se apenas
+        // o fluxo acumulado.
+        List<Account> accounts = accountRepo.findByUserIdOrderByIdAsc(user.getId());
+        boolean hasBalance = accounts.stream().anyMatch(a -> a.getCurrentBalance() != null);
+        BigDecimal startingBalance = accounts.stream()
+                .map(Account::getCurrentBalance)
+                .filter(java.util.Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        BigDecimal balance = startingBalance;
         List<ForecastPoint> points = new ArrayList<>();
         for (Occurrence o : occ) {
             balance = o.inflow() ? balance.add(o.amount()) : balance.subtract(o.amount());
             points.add(new ForecastPoint(o.date(), o.name(), o.category(), o.inflow(),
                     o.amount(), o.source(), balance));
         }
-        return new ForecastResponse(hasBalance ? user.getCurrentBalance() : null, hasBalance,
+        return new ForecastResponse(hasBalance ? startingBalance : null, hasBalance,
                 horizon, points, balance);
     }
 
@@ -121,13 +130,6 @@ public class CalendarController {
     @DeleteMapping("/events/{id}")
     public void delete(@AuthenticationPrincipal User user, @PathVariable Long id) {
         repo.findByIdAndUserId(id, user.getId()).ifPresent(repo::delete);
-    }
-
-    @PutMapping("/balance")
-    public ForecastResponse setBalance(@AuthenticationPrincipal User user, @RequestBody BalanceRequest req) {
-        user.setCurrentBalance(req.balance());
-        userRepo.save(user);
-        return upcoming(user, 60);
     }
 
     // ---------- internals ----------

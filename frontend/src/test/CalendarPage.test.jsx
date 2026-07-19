@@ -10,7 +10,7 @@ vi.mock('../api', async (importOriginal) => {
     ...actual,
     api: {
       getCalendar: vi.fn(), getUpcoming: vi.fn(), addCalendarEvent: vi.fn(),
-      updateCalendarEvent: vi.fn(), deleteCalendarEvent: vi.fn(), setBalance: vi.fn(),
+      updateCalendarEvent: vi.fn(), deleteCalendarEvent: vi.fn(),
     },
   }
 })
@@ -64,24 +64,6 @@ describe('CalendarPage', () => {
 
     await waitFor(() => expect(api.addCalendarEvent).toHaveBeenCalledTimes(1))
     expect(api.addCalendarEvent.mock.calls[0][0]).toMatchObject({ name: 'Luz', amount: 60 })
-  })
-
-  it('definir o saldo atual chama a API', async () => {
-    api.getCalendar.mockResolvedValue(monthData())
-    api.setBalance.mockResolvedValue({})
-    const user = userEvent.setup()
-    render(<CalendarPage />)
-
-    await waitFor(() => expect(screen.getByRole('button', { name: /Saldo atual/ })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: /Saldo atual/ }))
-
-    const dialog = screen.getByRole('dialog')
-    const input = within(dialog).getByPlaceholderText('Ex: 2500')
-    await user.clear(input) // vem pré-preenchido com o saldo atual da previsão
-    await user.type(input, '3000')
-    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }))
-
-    await waitFor(() => expect(api.setBalance).toHaveBeenCalledWith(3000))
   })
 
   it('editar um evento envia as alterações', async () => {

@@ -1,7 +1,8 @@
 package com.tracky.calendar;
 
 import com.tracky.auth.User;
-import com.tracky.auth.UserRepository;
+import com.tracky.expense.Account;
+import com.tracky.expense.AccountRepository;
 import com.tracky.goal.Goal;
 import com.tracky.goal.GoalRepository;
 import com.tracky.investment.Investment;
@@ -31,18 +32,40 @@ class CalendarControllerTest {
     @Mock CalendarEventRepository eventRepo;
     @Mock InvestmentRepository investmentRepo;
     @Mock GoalRepository goalRepo;
-    @Mock UserRepository userRepo;
+    @Mock AccountRepository accountRepo;
 
     CalendarController controller;
     User user;
 
     @BeforeEach
     void setUp() {
-        controller = new CalendarController(eventRepo, investmentRepo, goalRepo, userRepo);
+        controller = new CalendarController(eventRepo, investmentRepo, goalRepo, accountRepo);
         user = mock(User.class);
         lenient().when(user.getId()).thenReturn(1L);
         lenient().when(investmentRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
         lenient().when(goalRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
+        lenient().when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
+    }
+
+    private Account account(String name, String balance) {
+        Account a = new Account();
+        a.setUserId(1L);
+        a.setName(name);
+        a.setCurrentBalance(balance == null ? null : new BigDecimal(balance));
+        return a;
+    }
+
+    /** Evento pontual numa data (usado nos testes de previsão para ocorrências deterministas). */
+    private CalendarEvent once(String name, LocalDate date, boolean inflow, String amount) {
+        CalendarEvent e = new CalendarEvent();
+        e.setUserId(1L);
+        e.setName(name);
+        e.setCategory(CalendarEvent.Category.OTHER);
+        e.setInflow(inflow);
+        e.setAmount(new BigDecimal(amount));
+        e.setFrequency(CalendarEvent.Frequency.ONCE);
+        e.setEventDate(date);
+        return e;
     }
 
     private CalendarEvent monthly(String name, int dayOfMonth, boolean inflow, String amount) {
@@ -181,5 +204,82 @@ class CalendarControllerTest {
         var goalOcc = resp.occurrences().stream().filter(o -> o.source().equals("GOAL")).findFirst().orElseThrow();
         assertThat(invOcc.date()).isEqualTo(LocalDate.of(2025, 2, 15));
         assertThat(goalOcc.date()).isEqualTo(LocalDate.of(2025, 2, 28));
+    }
+
+    // ---------- previsão de saldo (agora a partir da soma das contas bancárias) ----------
+
+    @Test
+    void previsaoSemContasNaoTemSaldoEAcumulaFluxoAPartirDeZero() {
+        when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(
+                once("Compra", LocalDate.now().plusDays(10), false, "100")));
+        // accountRepo devolve lista vazia (stub por omissão) → sem saldo definido
+
+        var resp = controller.upcoming(user, 60);
+
+        assertThat(resp.hasBalance()).isFalse();
+        assertThat(resp.startingBalance()).isNull();
+        assertThat(resp.points()).hasSize(1);
+        assertThat(resp.points().get(0).balanceAfter()).isEqualByComparingTo("-100");
+        assertThat(resp.endBalance()).isEqualByComparingTo("-100");
+    }
+
+    @Test
+    void previsaoUsaSomaDosSaldosDefinidosNasContasEIgnoraOsNulos() {
+        when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(
+                once("Compra", LocalDate.now().plusDays(5), false, "200")));
+        when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(
+                account("Santander", "1000"),
+                account("Revolut", "500"),
+                account("Trade Republic", null))); // sem saldo definido → não conta
+
+        var resp = controller.upcoming(user, 60);
+
+        assertThat(resp.hasBalance()).isTrue();
+        assertThat(resp.startingBalance()).isEqualByComparingTo("1500");
+        assertThat(resp.points()).hasSize(1);
+        assertThat(resp.points().get(0).balanceAfter()).isEqualByComparingTo("1300");
+        assertThat(resp.endBalance()).isEqualByComparingTo("1300");
+    }
+
+    @Test
+    void contaSemSaldoDefinidoNaoAtivaPrevisaoDeSaldo() {
+        when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of());
+        when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(account("Santander", null)));
+
+        var resp = controller.upcoming(user, 60);
+
+        assertThat(resp.hasBalance()).isFalse();
+        assertThat(resp.startingBalance()).isNull();
+        assertThat(resp.points()).isEmpty();
+        assertThat(resp.endBalance()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void saldoAcumulaPorOrdemDeDataComEntradasESaidas() {
+        when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(
+                once("Salário", LocalDate.now().plusDays(5), true, "300"),
+                once("Renda", LocalDate.now().plusDays(10), false, "100")));
+        when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(account("Santander", "1000")));
+
+        var resp = controller.upcoming(user, 60);
+
+        assertThat(resp.startingBalance()).isEqualByComparingTo("1000");
+        assertThat(resp.points()).hasSize(2);
+        assertThat(resp.points().get(0).balanceAfter()).isEqualByComparingTo("1300"); // +300
+        assertThat(resp.points().get(1).balanceAfter()).isEqualByComparingTo("1200"); // -100
+        assertThat(resp.endBalance()).isEqualByComparingTo("1200");
+    }
+
+    @Test
+    void saldoNegativoQuandoAsSaidasExcedemOSaldoInicial() {
+        when(eventRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(
+                once("Compra grande", LocalDate.now().plusDays(7), false, "250")));
+        when(accountRepo.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(account("Revolut", "100")));
+
+        var resp = controller.upcoming(user, 60);
+
+        assertThat(resp.hasBalance()).isTrue();
+        assertThat(resp.startingBalance()).isEqualByComparingTo("100");
+        assertThat(resp.endBalance()).isEqualByComparingTo("-150");
     }
 }
