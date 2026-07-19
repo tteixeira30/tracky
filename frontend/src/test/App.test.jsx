@@ -63,7 +63,8 @@ describe('App / Shell', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByLabelText('Terminar sessão'))
+    await user.click(screen.getByRole('button', { name: 'Perfil e definições' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Terminar sessão' }))
     expect(authed.logout).toHaveBeenCalledOnce()
   })
 })

@@ -42,7 +42,7 @@ describe('IncomePage', () => {
     api.getIncome.mockResolvedValue(income())
     render(<IncomePage />)
 
-    await waitFor(() => expect(screen.getByText('Poupança')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Poupança').length).toBeGreaterThan(0))
     expect(screen.getAllByText(/2000,00/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/20%/).length).toBeGreaterThan(0)
   })
@@ -79,8 +79,8 @@ describe('IncomePage', () => {
     const user = userEvent.setup()
     render(<IncomePage />)
 
-    await waitFor(() => expect(screen.getByText('Poupança')).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: /Editar/ }))
+    await waitFor(() => expect(screen.getAllByText('Poupança').length).toBeGreaterThan(0))
+    await user.click(screen.getByRole('button', { name: 'Editar' }))
 
     const dialog = screen.getByRole('dialog')
     const input = within(dialog).getByRole('spinbutton')
@@ -97,8 +97,8 @@ describe('IncomePage', () => {
     const user = userEvent.setup()
     render(<IncomePage />)
 
-    await waitFor(() => expect(screen.getByText('Poupança')).toBeInTheDocument())
-    await user.click(screen.getByLabelText('Remover'))
+    await waitFor(() => expect(screen.getAllByText('Poupança').length).toBeGreaterThan(0))
+    await user.click(screen.getByLabelText('Remover Poupança'))
     await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remover' }))
 
     await waitFor(() => expect(api.deleteAllocation).toHaveBeenCalledWith(1))
@@ -118,7 +118,7 @@ describe('IncomePage', () => {
     const user = userEvent.setup()
     render(<IncomePage />)
 
-    await waitFor(() => expect(screen.getByText('Subscrições')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Subscrições').length).toBeGreaterThan(0))
     await user.click(screen.getByLabelText('Ver detalhe'))
     expect(screen.getByText('Netflix')).toBeInTheDocument()
 
@@ -138,7 +138,7 @@ describe('IncomePage', () => {
     const user = userEvent.setup()
     render(<IncomePage />)
 
-    await waitFor(() => expect(screen.getByText('Subscrições')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText('Subscrições').length).toBeGreaterThan(0))
     await user.click(screen.getByLabelText('Ver detalhe'))
     await user.click(screen.getByLabelText('Remover Netflix'))
     await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remover' }))
