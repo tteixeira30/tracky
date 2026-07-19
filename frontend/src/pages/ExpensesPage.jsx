@@ -5,27 +5,11 @@ import DatePicker from '../components/DatePicker'
 import Dropdown from '../components/Dropdown'
 import { useToast } from '../components/Toast'
 import { analyzeStatement, analyzeRows, buildTransactions, categoryKey } from '../statementParser'
+import { CATEGORIES, catLabel, catColor } from '../categories'
 import {
   IconBank, IconReceipt, IconUpload, IconPlus, IconPencil, IconWallet,
   IconChevronLeft, IconChevronRight, IconArrowUp, IconArrowDown, IconCoins,
 } from '../components/Icons'
-
-const CATEGORY_META = {
-  INCOME: { label: 'Rendimento', color: 'var(--green)' },
-  GROCERIES: { label: 'Supermercado', color: '#f59e0b' },
-  RESTAURANT: { label: 'Restauração', color: '#fb7185' },
-  TRANSPORT: { label: 'Transportes', color: 'var(--cyan)' },
-  HOUSING: { label: 'Casa & contas', color: '#a78bfa' },
-  SUBSCRIPTION: { label: 'Subscrições', color: '#818cf8' },
-  SHOPPING: { label: 'Compras', color: '#f472b6' },
-  HEALTH: { label: 'Saúde', color: '#34d399' },
-  LEISURE: { label: 'Lazer', color: '#fbbf24' },
-  TRANSFER: { label: 'Transferências', color: '#94a3b8' },
-  OTHER: { label: 'Outros', color: 'var(--text-dim)' },
-}
-const CATEGORIES = Object.keys(CATEGORY_META)
-const catLabel = (c) => (CATEGORY_META[c] || CATEGORY_META.OTHER).label
-const catColor = (c) => (CATEGORY_META[c] || CATEGORY_META.OTHER).color
 
 const EMPTY_TX = { accountId: '', date: '', description: '', amount: '', inflow: false, category: 'OTHER' }
 

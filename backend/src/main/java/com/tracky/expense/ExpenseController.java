@@ -57,6 +57,12 @@ public class ExpenseController {
     public record MonthSummary(String month, BigDecimal inflows, BigDecimal outflows, BigDecimal net,
                                List<CategoryTotal> byCategory, List<AccountDto> accounts,
                                List<TransactionDto> transactions) {}
+    /** Entradas/saídas de um mês (+ saídas por categoria) para as séries anuais e o detalhe do painel. */
+    public record MonthStat(String month, BigDecimal outflows, BigDecimal inflows, BigDecimal net,
+                            List<CategoryTotal> byCategory) {}
+    public record ExpenseStats(List<MonthStat> months, BigDecimal yearOutflows, BigDecimal yearInflows,
+                               BigDecimal avgMonthlyOutflows, BigDecimal currentMonthOutflows,
+                               BigDecimal prevMonthOutflows, List<CategoryTotal> topCategories, boolean hasData) {}
 
     // ---------- Contas ----------
 
@@ -125,6 +131,58 @@ public class ExpenseController {
 
         return new MonthSummary(ym.toString(), in, out, in.subtract(out), categories, accountDtos,
                 txs.stream().map(t -> toDto(t, accountNames)).toList());
+    }
+
+    /**
+     * Estatísticas de despesas dos últimos 12 meses (mês a mês) para o painel:
+     * série mensal de entradas/saídas, total e média do ano, mês atual vs anterior
+     * e as principais categorias do período. Tudo em EUR.
+     */
+    @GetMapping("/stats")
+    public ExpenseStats stats(@AuthenticationPrincipal User user) {
+        YearMonth current = YearMonth.now();
+        YearMonth start = current.minusMonths(11);
+        LocalDate from = start.atDay(1), to = current.atEndOfMonth();
+
+        // buckets para os 12 meses da janela, mesmo os que não têm movimentos
+        Map<String, BigDecimal> outByMonth = new LinkedHashMap<>();
+        Map<String, BigDecimal> inByMonth = new LinkedHashMap<>();
+        for (int i = 0; i < 12; i++) {
+            String key = start.plusMonths(i).toString();
+            outByMonth.put(key, BigDecimal.ZERO);
+            inByMonth.put(key, BigDecimal.ZERO);
+        }
+
+        Map<String, BigDecimal> byCategory = new LinkedHashMap<>();
+        Map<String, Map<String, BigDecimal>> catByMonth = new HashMap<>();
+        BigDecimal yearOut = BigDecimal.ZERO, yearIn = BigDecimal.ZERO;
+        for (Transaction t : transactions.findByUserIdAndTxDateBetweenOrderByTxDateDescIdDesc(user.getId(), from, to)) {
+            String key = YearMonth.from(t.getTxDate()).toString();
+            if (t.isInflow()) {
+                inByMonth.merge(key, t.getAmount(), BigDecimal::add);
+                yearIn = yearIn.add(t.getAmount());
+            } else {
+                outByMonth.merge(key, t.getAmount(), BigDecimal::add);
+                yearOut = yearOut.add(t.getAmount());
+                byCategory.merge(t.getCategory().name(), t.getAmount(), BigDecimal::add);
+                catByMonth.computeIfAbsent(key, k -> new HashMap<>())
+                        .merge(t.getCategory().name(), t.getAmount(), BigDecimal::add);
+            }
+        }
+
+        List<MonthStat> months = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            String key = start.plusMonths(i).toString();
+            BigDecimal out = outByMonth.get(key), in = inByMonth.get(key);
+            months.add(new MonthStat(key, out, in, in.subtract(out), sortedCategories(catByMonth.get(key))));
+        }
+
+        BigDecimal avg = yearOut.divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
+        List<CategoryTotal> topCategories = sortedCategories(byCategory).stream().limit(5).toList();
+
+        return new ExpenseStats(months, yearOut, yearIn, avg,
+                outByMonth.get(current.toString()), outByMonth.get(current.minusMonths(1).toString()),
+                topCategories, yearOut.signum() > 0 || yearIn.signum() > 0);
     }
 
     @PostMapping("/transactions")
@@ -243,6 +301,14 @@ public class ExpenseController {
     }
 
     // ---------- Helpers ----------
+
+    /** Categorias ordenadas por total decrescente; null/vazio → lista vazia. */
+    private static List<CategoryTotal> sortedCategories(Map<String, BigDecimal> byCategory) {
+        if (byCategory == null || byCategory.isEmpty()) return List.of();
+        return byCategory.entrySet().stream()
+                .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+                .map(e -> new CategoryTotal(e.getKey(), e.getValue())).toList();
+    }
 
     private Account requireAccount(User user, Long accountId) {
         return accounts.findByIdAndUserId(accountId, user.getId())

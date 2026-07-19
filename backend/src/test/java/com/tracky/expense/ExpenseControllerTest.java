@@ -9,11 +9,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -77,6 +79,63 @@ class ExpenseControllerTest {
         assertThat(t1.getCategory()).isEqualTo(Transaction.Category.GROCERIES);
         assertThat(t2.getCategory()).isEqualTo(Transaction.Category.GROCERIES);
         assertThat(netflix.getCategory()).isEqualTo(Transaction.Category.OTHER);
+    }
+
+    @Test
+    void statsAgregaSaidasPorMesMediaAnualETopCategorias() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+
+        YearMonth current = YearMonth.now();
+        YearMonth prev = current.minusMonths(1);
+
+        // mês atual: 100 (supermercado) + 50 (transportes) de saída, 1500 de entrada
+        Transaction a = txOn(current.atDay(3), new BigDecimal("100"), false, Transaction.Category.GROCERIES);
+        Transaction b = txOn(current.atDay(10), new BigDecimal("50"), false, Transaction.Category.TRANSPORT);
+        Transaction income = txOn(current.atDay(5), new BigDecimal("1500"), true, Transaction.Category.INCOME);
+        // mês anterior: 200 de saída (supermercado)
+        Transaction prevTx = txOn(prev.atDay(8), new BigDecimal("200"), false, Transaction.Category.GROCERIES);
+
+        when(transactions.findByUserIdAndTxDateBetweenOrderByTxDateDescIdDesc(anyLong(), any(), any()))
+                .thenReturn(List.of(a, b, income, prevTx));
+
+        ExpenseController.ExpenseStats stats = controller.stats(user);
+
+        assertThat(stats.months()).hasSize(12);
+        assertThat(stats.hasData()).isTrue();
+        assertThat(stats.yearOutflows()).isEqualByComparingTo("350");   // 100+50+200
+        assertThat(stats.yearInflows()).isEqualByComparingTo("1500");
+        assertThat(stats.currentMonthOutflows()).isEqualByComparingTo("150");
+        assertThat(stats.prevMonthOutflows()).isEqualByComparingTo("200");
+        assertThat(stats.avgMonthlyOutflows()).isEqualByComparingTo("29.17"); // 350/12
+
+        // top categoria: supermercado (100+200=300) à frente de transportes (50); entradas não contam
+        assertThat(stats.topCategories().get(0).category()).isEqualTo("GROCERIES");
+        assertThat(stats.topCategories().get(0).total()).isEqualByComparingTo("300");
+
+        // o último ponto da série é o mês atual, com as saídas por categoria desse mês
+        ExpenseController.MonthStat last = stats.months().get(11);
+        assertThat(last.month()).isEqualTo(current.toString());
+        assertThat(last.outflows()).isEqualByComparingTo("150");
+        assertThat(last.inflows()).isEqualByComparingTo("1500");
+        assertThat(last.byCategory()).extracting(ExpenseController.CategoryTotal::category)
+                .containsExactly("GROCERIES", "TRANSPORT"); // ordenado por total desc (100, 50)
+
+        // um mês sem movimentos tem categorias vazias (não null)
+        assertThat(stats.months().get(0).byCategory()).isEmpty();
+    }
+
+    private Transaction txOn(LocalDate date, BigDecimal amount, boolean inflow, Transaction.Category category) {
+        Transaction t = new Transaction();
+        t.setUserId(1L);
+        t.setAccountId(10L);
+        t.setTxDate(date);
+        t.setDescription("mov");
+        t.setAmount(amount);
+        t.setInflow(inflow);
+        t.setCategory(category);
+        return t;
     }
 
     private Transaction tx(String description, Transaction.Category category) {
