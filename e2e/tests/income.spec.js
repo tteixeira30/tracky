@@ -18,7 +18,7 @@ test.describe('rendimento', () => {
     await expect(page.locator('.row-title', { hasText: 'Poupança E2E' })).toBeVisible()
   })
 
-  test('categoria por valor fixo aparece marcada como "Valor fixo"', async ({ page }) => {
+  test('categoria por valor fixo mostra o valor mensal definido', async ({ page }) => {
     await registerViaUi(page)
 
     await sidebarTab(page, 'Rendimento').click()
@@ -32,7 +32,7 @@ test.describe('rendimento', () => {
 
     const row = page.locator('tr', { has: page.locator('.row-title', { hasText: 'Renda Fixa E2E' }) })
     await expect(row).toBeVisible()
-    await expect(row.locator('.type-chip')).toHaveText('Valor fixo')
+    await expect(row.locator('td[data-label="Valor"]')).toContainText('450,00')
   })
 
   test('eliminar uma categoria remove-a da lista', async ({ page }) => {

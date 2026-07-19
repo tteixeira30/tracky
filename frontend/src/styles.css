@@ -164,6 +164,56 @@ body::before {
 .user-info strong { display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .user-info small { display: block; font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ---------- Menu de perfil (avatar → definições + conquistas) ---------- */
+.profile-menu { position: relative; }
+.profile-trigger {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); font-family: inherit; cursor: pointer; text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.profile-trigger:hover { border-color: rgba(99, 102, 241, 0.35); }
+.profile-menu.open .profile-trigger { border-color: rgba(99, 102, 241, 0.35); }
+.profile-caret { margin-left: auto; flex-shrink: 0; color: var(--text-faint); transition: transform 0.15s ease; }
+.profile-menu.open .profile-caret { transform: rotate(-90deg); color: var(--accent); }
+
+.profile-pop {
+  position: absolute; bottom: calc(100% + 8px); left: 0;
+  width: 264px; max-width: calc(100vw - 24px);
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 8px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4);
+  z-index: 60;
+}
+.profile-head { display: flex; align-items: center; gap: 10px; padding: 6px 8px 10px; }
+.profile-sep { height: 1px; background: var(--border); margin: 5px 2px; }
+.profile-item {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 10px; border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text);
+  font-family: inherit; font-size: 13.5px; font-weight: 500;
+  cursor: pointer; text-align: left; transition: background 0.15s ease, color 0.15s ease;
+}
+.profile-item svg { color: var(--text-dim); flex-shrink: 0; }
+.profile-item:hover { background: var(--surface-2); }
+.profile-item.active { background: var(--accent-soft); }
+.profile-item.active svg { color: var(--accent); }
+.profile-item-caret { margin-left: auto; color: var(--text-faint); }
+.profile-item.danger { color: var(--red); }
+.profile-item.danger svg { color: var(--red); }
+.profile-item.danger:hover { background: rgba(239, 68, 68, 0.12); }
+
+.profile-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px;
+}
+.profile-row > span { font-size: 12.5px; font-weight: 500; color: var(--text-dim); }
+.profile-row .dropdown { width: auto; }
+.profile-row .dd-trigger { height: 34px; box-sizing: border-box; padding: 0 10px; font-size: 12.5px; }
+
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
   50% { box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
@@ -220,16 +270,17 @@ body::before {
   .sidebar .nav { display: none; }
   .sidebar-foot { margin-top: 0; flex-direction: row; align-items: center; gap: 8px; height: 36px; }
   .live-note { display: none; }
-  .currency-select { flex-direction: row; align-items: center; margin: auto 0; height: 36px; }
-  .currency-select > span { display: none; }
-  .currency-select .dropdown { width: auto; }
-  .currency-select .dd-trigger { height: 36px; box-sizing: border-box; padding: 0 10px; gap: 6px; font-size: 12px; }
-  .currency-select .dd-pop { left: auto; right: 0; min-width: 140px; }
-  .theme-select { margin: auto 0; height: 36px; }
-  .theme-select > span { display: none; }
-  .user-chip { height: 36px; margin: auto 0; padding: 0; background: transparent; border: none; gap: 8px; }
-  .user-info { display: none; }
-  .user-chip .icon-btn { display: flex; align-items: center; justify-content: center; }
+
+  /* no topo mobile o avatar é só um botão redondo; o resto vai para o popover */
+  .profile-menu { margin: auto 0; }
+  .profile-trigger { width: auto; height: 36px; padding: 0; background: transparent; border: none; }
+  .profile-trigger:hover { border-color: transparent; }
+  .profile-menu.open .profile-trigger { border-color: transparent; }
+  .profile-trigger .user-info,
+  .profile-trigger .profile-caret { display: none; }
+  /* popover abre para baixo, encostado à direita */
+  .profile-pop { bottom: auto; left: auto; right: 0; top: calc(100% + 10px); }
+  .profile-pop .dd-pop { left: auto; right: 0; min-width: 140px; }
 
   .main { margin-left: 0; padding: 20px 16px calc(96px + env(safe-area-inset-bottom)); }
 
@@ -288,6 +339,9 @@ body::before {
 @media (max-width: 700px) {
   .grid-2 { grid-template-columns: 1fr; }
   .grid-4 { grid-template-columns: 1fr 1fr; gap: 12px; }
+  /* no telemóvel o donut + lista de categorias sobem para o topo (a seguir ao total);
+     a tabela editável fica por baixo para gestão detalhada */
+  .income-grid .income-overview { order: -1; }
 }
 
 /* ---------- Stat cards ---------- */
@@ -846,6 +900,42 @@ tr.subrow:focus-within .subrow-actions .icon-btn { opacity: 1; }
 .income-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
 .income-hero .amount { font-size: 34px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
 .income-hero .caption { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+
+/* Donut com o total ao centro + lista de categorias (vista Rendimento) */
+.donut-wrap { position: relative; }
+.donut-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none; text-align: center;
+}
+.donut-center .dc-amount {
+  font-size: 23px; font-weight: 800; letter-spacing: -0.6px;
+  font-variant-numeric: tabular-nums;
+}
+.donut-center .dc-label {
+  font-size: 10.5px; font-weight: 600; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.7px; margin-top: 3px;
+}
+
+.income-legend { list-style: none; margin: 12px 0 0; padding: 0; }
+.income-legend .leg-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 4px; border-top: 1px solid var(--border);
+}
+.income-legend .leg-row:first-child { border-top: none; }
+.leg-swatch { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; }
+.leg-name {
+  flex: 1; min-width: 0; font-size: 13.5px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.leg-pct {
+  font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+  min-width: 38px; text-align: right;
+}
+.leg-amount {
+  font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  min-width: 74px; text-align: right;
+}
 
 /* ---------- Ajustes mobile ---------- */
 

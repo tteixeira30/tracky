@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { PASSWORD, registerViaUi, sidebarTab, uniqueEmail } from './helpers.js'
+import { PASSWORD, profileMenuAction, registerViaUi, sidebarTab, uniqueEmail } from './helpers.js'
 
 test.describe('autenticação', () => {
   test('registo → dashboard → logout → login de novo', async ({ page }) => {
@@ -8,10 +8,10 @@ test.describe('autenticação', () => {
     // sessão iniciada: brand e separadores visíveis
     await expect(page.locator('.sidebar .brand')).toContainText('Tracky')
     await expect(sidebarTab(page, 'Rendimento')).toBeVisible()
-    await expect(page.locator('.user-chip')).toContainText('Maria Teste')
+    await expect(page.locator('.profile-trigger')).toContainText('Maria Teste')
 
     // terminar sessão
-    await page.getByRole('button', { name: 'Terminar sessão' }).click()
+    await profileMenuAction(page, 'Terminar sessão')
     await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible()
 
     // entrar de novo com as mesmas credenciais
@@ -23,7 +23,7 @@ test.describe('autenticação', () => {
 
   test('password errada mostra erro e não inicia sessão', async ({ page }) => {
     const { email } = await registerViaUi(page)
-    await page.getByRole('button', { name: 'Terminar sessão' }).click()
+    await profileMenuAction(page, 'Terminar sessão')
     await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible()
 
     await page.getByPlaceholder('exemplo@email.com').fill(email)

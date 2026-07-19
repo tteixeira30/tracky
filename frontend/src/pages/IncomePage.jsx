@@ -37,6 +37,7 @@ export default function IncomePage() {
   const [incomeInput, setIncomeInput] = useState('')
   const [allocModal, setAllocModal] = useState(false)
   const [allocForm, setAllocForm] = useState(EMPTY_ALLOC)
+  const [allocEditId, setAllocEditId] = useState(null)   // null = adicionar; id = editar
   const [toDelete, setToDelete] = useState(null)
   const [expanded, setExpanded] = useState(() => new Set())
   const [itemModal, setItemModal] = useState(null)   // { alloc, item } — item null = adicionar
@@ -73,11 +74,25 @@ export default function IncomePage() {
   const openAddAlloc = () => {
     // por omissão sugere a próxima cor da paleta ainda "livre" pela ordem das categorias
     const nextColor = COLORS[(data?.allocations?.length ?? 0) % COLORS.length]
+    setAllocEditId(null)
     setAllocForm({ ...EMPTY_ALLOC, color: nextColor })
     setAllocModal(true)
   }
 
-  const addAlloc = async () => {
+  const openEditAlloc = (a, i) => {
+    setAllocEditId(a.id)
+    setAllocForm({
+      name: a.name,
+      mode: a.fixedAmount != null ? 'fixed' : 'percentage',
+      value: String(a.fixedAmount != null ? fromEur(a.fixedAmount) : a.percentage),
+      color: allocColor(a, i),
+    })
+    setAllocModal(true)
+  }
+
+  const closeAllocModal = () => { setAllocModal(false); setAllocEditId(null); setAllocForm(EMPTY_ALLOC) }
+
+  const saveAlloc = async () => {
     const value = Number(allocForm.value)
     if (!allocForm.name.trim() || !value || value <= 0) {
       toast.error('Campos em falta', allocForm.mode === 'percentage'
@@ -90,11 +105,16 @@ export default function IncomePage() {
       const base = allocForm.mode === 'percentage'
         ? { name: allocForm.name.trim(), percentage: value }
         : { name: allocForm.name.trim(), fixedAmount: toEur(value) }
-      setData(await api.addAllocation({ ...base, color: allocForm.color }, data.month))
-      setAllocModal(false)
-      setAllocForm(EMPTY_ALLOC)
-      toast.success('Categoria adicionada', `"${allocForm.name.trim()}" incluída em ${fmtMonth(data.month)}.`)
-    } catch (e) { toast.error('Erro ao adicionar', e.message) }
+      const payload = { ...base, color: allocForm.color }
+      if (allocEditId) {
+        setData(await api.updateAllocation(allocEditId, payload))
+        toast.success('Categoria atualizada', `"${allocForm.name.trim()}" em ${fmtMonth(data.month)}.`)
+      } else {
+        setData(await api.addAllocation(payload, data.month))
+        toast.success('Categoria adicionada', `"${allocForm.name.trim()}" incluída em ${fmtMonth(data.month)}.`)
+      }
+      closeAllocModal()
+    } catch (e) { toast.error(allocEditId ? 'Erro ao guardar' : 'Erro ao adicionar', e.message) }
     finally { setBusy(false) }
   }
 
@@ -178,6 +198,7 @@ export default function IncomePage() {
   const overAllocated = income > 0 && Number(data.unallocated) < 0
   const pieData = data.allocations.map((a, i) => ({ name: a.name, value: Number(a.amount), color: allocColor(a, i) }))
   if (Number(data.unallocated) > 0.005) pieData.push({ name: 'Não alocado', value: Number(data.unallocated), color: COLORS[pieData.length % COLORS.length] })
+  const donutTotal = pieData.reduce((s, d) => s + d.value, 0)
 
   // navegação entre meses com dados
   const months = data.availableMonths ?? []
@@ -236,8 +257,8 @@ export default function IncomePage() {
         </button>
       </div>
 
-      <div className="grid grid-2">
-        <div className="card">
+      <div className="grid grid-2 income-grid">
+        <div className="card income-breakdown">
           <div className="card-header">
             <div>
               <h3>Distribuição</h3>
@@ -262,7 +283,7 @@ export default function IncomePage() {
             <div className="table-wrap">
               <table className="responsive">
                 <thead>
-                  <tr><th>Categoria</th><th>Regra</th><th>%</th><th>Valor</th><th></th></tr>
+                  <tr><th>Categoria</th><th>%</th><th>Valor</th><th></th></tr>
                 </thead>
                 <tbody>
                   {data.allocations.map((a, i) => {
@@ -293,24 +314,22 @@ export default function IncomePage() {
                             <span className="row-title">{a.name}</span>
                             {items.length > 0 && <span className="item-count">{items.length}</span>}
                           </td>
-                          <td data-label="Regra">
-                            <span className="type-chip">
-                              {a.fixedAmount != null ? 'Valor fixo' : `${Number(a.percentage).toFixed(0)}%`}
-                            </span>
-                          </td>
                           <td data-label="% do rendimento" className={a.fixedAmount != null ? 'dim' : ''}>
                             {a.effectivePercentage != null ? `${Number(a.effectivePercentage).toFixed(1)}%` : '—'}
                           </td>
                           <td data-label="Valor">{fmtEur(a.amount)}</td>
                           <td className="actions-cell" style={{ textAlign: 'right' }}>
-                            <button className="icon-btn danger" onClick={() => setToDelete(a)} aria-label="Remover">✕</button>
+                            <button className="icon-btn" onClick={() => openEditAlloc(a, i)}
+                                    aria-label={`Editar ${a.name}`} title="Editar categoria"><IconPencil size={14} /></button>
+                            <button className="icon-btn danger" onClick={() => setToDelete(a)}
+                                    aria-label={`Remover ${a.name}`} title="Remover categoria"><IconTrash size={14} /></button>
                           </td>
                         </tr>
                         {isOpen && (
                           <>
                             {items.length === 0 ? (
                               <tr className="subrow subrow-empty" style={{ '--alloc-color': color }}>
-                                <td colSpan={3}>
+                                <td colSpan={2}>
                                   <div className="subrow-line">
                                     <span className="subrow-hint">Sem itens — ex: Netflix, Claude, HBO.</span>
                                   </div>
@@ -321,7 +340,7 @@ export default function IncomePage() {
                             ) : (
                               items.map((it) => (
                                 <tr key={it.id} className="subrow" style={{ '--alloc-color': color }}>
-                                  <td colSpan={3}>
+                                  <td colSpan={2}>
                                     <div className="subrow-line">
                                       <span className="subrow-name" title={it.name}>{it.name}</span>
                                     </div>
@@ -338,7 +357,7 @@ export default function IncomePage() {
                               ))
                             )}
                             <tr className="subrow subrow-foot" style={{ '--alloc-color': color }}>
-                              <td colSpan={3}>
+                              <td colSpan={2}>
                                 <div className="subrow-line">
                                   <button className="btn small ghost subrow-add" onClick={() => openAddItem(a)}>
                                     <IconPlus size={12} /> Item
@@ -365,7 +384,6 @@ export default function IncomePage() {
                   })}
                   <tr>
                     <td className="dim">Não alocado</td>
-                    <td></td>
                     <td data-label="% do rendimento" className="dim">{income > 0 ? `${Math.max(0, 100 - totalPct).toFixed(1)}%` : '—'}</td>
                     <td data-label="Valor" className={Number(data.unallocated) < 0 ? 'neg' : 'dim'}>{fmtEur(data.unallocated)}</td>
                     <td></td>
@@ -381,7 +399,7 @@ export default function IncomePage() {
           )}
         </div>
 
-        <div className="card">
+        <div className="card income-overview">
           <div className="card-header">
             <div>
               <h3>Visão geral</h3>
@@ -395,15 +413,36 @@ export default function IncomePage() {
               <p>Define o rendimento deste mês e cria categorias para veres o gráfico da distribuição.</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={290}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={100}
-                     paddingAngle={3} strokeWidth={0}>
-                  {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                </Pie>
-                <Tooltip content={<ChartTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <>
+              <div className="donut-wrap">
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={70} outerRadius={104}
+                         paddingAngle={3} strokeWidth={0}>
+                      {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="donut-center">
+                  <span className="dc-amount">{fmtEur(donutTotal)}</span>
+                  <span className="dc-label">{income > 0 ? 'Rendimento' : 'Alocado'}</span>
+                </div>
+              </div>
+              <ul className="income-legend">
+                {pieData.map((d, i) => {
+                  const pct = donutTotal > 0 ? (d.value / donutTotal) * 100 : 0
+                  return (
+                    <li key={i} className="leg-row">
+                      <span className="leg-swatch" style={{ background: d.color }} />
+                      <span className="leg-name" title={d.name}>{d.name}</span>
+                      <span className="leg-pct">{pct.toFixed(0)}%</span>
+                      <span className="leg-amount">{fmtEur(d.value)}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
           )}
         </div>
       </div>
@@ -428,12 +467,17 @@ export default function IncomePage() {
         </div>
       </Modal>
 
-      <Modal open={allocModal} onClose={() => setAllocModal(false)}
-             title="Nova categoria" subtitle={`Reserva uma parte do rendimento de ${fmtMonth(data.month)}.`} width={440}
+      <Modal open={allocModal} onClose={closeAllocModal}
+             title={allocEditId ? 'Editar categoria' : 'Nova categoria'}
+             subtitle={allocEditId
+               ? `Ajusta a categoria de ${fmtMonth(data.month)}.`
+               : `Reserva uma parte do rendimento de ${fmtMonth(data.month)}.`} width={440}
              footer={
                <>
-                 <button className="btn ghost" onClick={() => setAllocModal(false)}>Cancelar</button>
-                 <button className="btn" onClick={addAlloc} disabled={busy}>{busy ? 'A adicionar…' : 'Adicionar'}</button>
+                 <button className="btn ghost" onClick={closeAllocModal}>Cancelar</button>
+                 <button className="btn" onClick={saveAlloc} disabled={busy}>
+                   {busy ? 'A guardar…' : allocEditId ? 'Guardar' : 'Adicionar'}
+                 </button>
                </>
              }>
         <div className="form-grid">
@@ -466,7 +510,7 @@ export default function IncomePage() {
               <input type="number" min="0" max={isPct ? 100 : undefined} step={isPct ? 0.5 : 0.01}
                      placeholder={isPct ? 'Ex: 30' : 'Ex: 400'} value={allocForm.value}
                      onChange={(e) => setAllocForm({ ...allocForm, value: e.target.value })}
-                     onKeyDown={(e) => e.key === 'Enter' && addAlloc()} />
+                     onKeyDown={(e) => e.key === 'Enter' && saveAlloc()} />
               <span className="affix">{isPct ? '%' : cur}</span>
             </div>
             {formHint && <span className="hint">{formHint}</span>}

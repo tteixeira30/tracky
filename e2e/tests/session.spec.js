@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerViaUi, sidebarTab } from './helpers.js'
+import { profileMenuAction, registerViaUi, sidebarTab } from './helpers.js'
 
 test.describe('sessão e rendimento', () => {
   test('a sessão sobrevive a um reload da página', async ({ page }) => {
@@ -9,12 +9,12 @@ test.describe('sessão e rendimento', () => {
 
     // continua autenticado — o token em localStorage revalida via /auth/me
     await expect(sidebarTab(page, 'Painel')).toBeVisible()
-    await expect(page.locator('.user-chip')).toContainText(name)
+    await expect(page.locator('.profile-trigger')).toContainText(name)
   })
 
   test('depois de logout o reload não recupera a sessão', async ({ page }) => {
     await registerViaUi(page)
-    await page.getByRole('button', { name: 'Terminar sessão' }).click()
+    await profileMenuAction(page, 'Terminar sessão')
     await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible()
 
     await page.reload()
