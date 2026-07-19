@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import DashboardPage from './pages/DashboardPage'
 import IncomePage from './pages/IncomePage'
 import InvestmentsPage from './pages/InvestmentsPage'
@@ -11,7 +11,7 @@ import { ToastProvider } from './components/Toast'
 import { AuthProvider, useAuth } from './components/AuthContext'
 import { ThemeProvider, useTheme } from './components/ThemeContext'
 import Dropdown from './components/Dropdown'
-import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconReceipt, IconTrophy, IconLogout, IconSun, IconMoon, IconEye, IconEyeOff } from './components/Icons'
+import { IconLogo, IconGrid, IconWallet, IconTrendingUp, IconTarget, IconCalendar, IconReceipt, IconTrophy, IconLogout, IconSun, IconMoon, IconEye, IconEyeOff, IconChevronRight } from './components/Icons'
 import { setPrivacyMode } from './api'
 
 const TABS = [
@@ -21,7 +21,6 @@ const TABS = [
   { id: 'investments', label: 'Investimentos', icon: IconTrendingUp },
   { id: 'goals', label: 'Objetivos', icon: IconTarget },
   { id: 'calendar', label: 'Calendário', icon: IconCalendar },
-  { id: 'achievements', label: 'Conquistas', icon: IconTrophy },
 ]
 
 const CURRENCIES = [
@@ -45,6 +44,89 @@ function ThemeToggle() {
       <span className={`tt-opt ${dark ? 'active' : ''}`}><IconMoon size={14} /></span>
       <span className={`tt-opt ${!dark ? 'active' : ''}`}><IconSun size={14} /></span>
     </button>
+  )
+}
+
+function ProfileMenu({ user, initials, baseCurrency, changeCurrency, privacy, togglePrivacy, onOpenAchievements, achievementsActive, onLogout }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => {
+      // ignora cliques no próprio menu e no popover (em portal) do seletor de moeda
+      if (ref.current?.contains(e.target) || e.target.closest?.('.dd-pop')) return
+      setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div className={`profile-menu ${open ? 'open' : ''}`} ref={ref}>
+      <button type="button" className="profile-trigger" onClick={() => setOpen((o) => !o)}
+              aria-expanded={open} aria-haspopup="menu" aria-label="Perfil e definições">
+        <span className="user-avatar">{initials}</span>
+        <div className="user-info">
+          <strong>{user.name}</strong>
+          <small>{user.email}</small>
+        </div>
+        <IconChevronRight size={16} className="profile-caret" />
+      </button>
+
+      {open && (
+        <div className="profile-pop" role="menu">
+          <div className="profile-head">
+            <span className="user-avatar">{initials}</span>
+            <div className="user-info">
+              <strong>{user.name}</strong>
+              <small>{user.email}</small>
+            </div>
+          </div>
+
+          <button type="button" role="menuitem"
+                  className={`profile-item ${achievementsActive ? 'active' : ''}`}
+                  onClick={() => { onOpenAchievements(); setOpen(false) }}>
+            <IconTrophy size={17} />
+            <span>Conquistas</span>
+            <IconChevronRight size={15} className="profile-item-caret" />
+          </button>
+
+          <div className="profile-sep" />
+
+          <div className="profile-row">
+            <span>Moeda base</span>
+            <Dropdown value={baseCurrency} onChange={changeCurrency}
+                      options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.code} · ${c.symbol}` }))} />
+          </div>
+          <div className="profile-row">
+            <span>Aparência</span>
+            <ThemeToggle />
+          </div>
+          <div className="profile-row">
+            <span>Ocultar valores</span>
+            <button type="button" className="theme-toggle" onClick={togglePrivacy} role="switch" aria-checked={privacy}
+                    aria-label={privacy ? 'Mostrar valores' : 'Esconder valores'}
+                    title={privacy ? 'Mostrar valores' : 'Esconder valores'}>
+              <span className={`tt-opt ${privacy ? 'active' : ''}`}><IconEyeOff size={14} /></span>
+              <span className={`tt-opt ${!privacy ? 'active' : ''}`}><IconEye size={14} /></span>
+            </button>
+          </div>
+
+          <div className="profile-sep" />
+
+          <button type="button" role="menuitem" className="profile-item danger" onClick={onLogout}>
+            <IconLogout size={16} />
+            <span>Terminar sessão</span>
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -99,34 +181,14 @@ function Shell() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <div className="currency-select">
-            <span>Moeda base</span>
-            <Dropdown value={baseCurrency} onChange={changeCurrency}
-                      options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.code} · ${c.symbol}` }))} />
-          </div>
-          <div className="theme-select">
-            <span>Aparência</span>
-            <ThemeToggle />
-          </div>
-          <div className="theme-select">
-            <span>Privacidade</span>
-            <button className="theme-toggle" onClick={togglePrivacy} role="switch" aria-checked={privacy}
-                    aria-label={privacy ? 'Mostrar valores' : 'Esconder valores'}
-                    title={privacy ? 'Mostrar valores' : 'Esconder valores'}>
-              <span className={`tt-opt ${privacy ? 'active' : ''}`}><IconEyeOff size={14} /></span>
-              <span className={`tt-opt ${!privacy ? 'active' : ''}`}><IconEye size={14} /></span>
-            </button>
-          </div>
-          <div className="user-chip">
-            <span className="user-avatar">{initials}</span>
-            <div className="user-info">
-              <strong>{user.name}</strong>
-              <small>{user.email}</small>
-            </div>
-            <button className="icon-btn" onClick={logout} title="Terminar sessão" aria-label="Terminar sessão">
-              <IconLogout size={16} />
-            </button>
-          </div>
+          <ProfileMenu
+            user={user} initials={initials}
+            baseCurrency={baseCurrency} changeCurrency={changeCurrency}
+            privacy={privacy} togglePrivacy={togglePrivacy}
+            onOpenAchievements={() => setTab('achievements')}
+            achievementsActive={tab === 'achievements'}
+            onLogout={logout}
+          />
           <div className="live-note">
             <span className="dot" />Cotações em tempo real<br />
             Yahoo Finance · CoinGecko
