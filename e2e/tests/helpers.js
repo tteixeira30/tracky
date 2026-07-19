@@ -16,6 +16,15 @@ export function sidebarTab(page, label) {
 }
 
 /**
+ * Conquistas e Terminar sessão vivem no menu de perfil (atrás do avatar),
+ * não na navegação. Abre o menu e clica no item pedido.
+ */
+export async function profileMenuAction(page, label) {
+  await page.getByRole('button', { name: 'Perfil e definições' }).click()
+  await page.getByRole('menuitem', { name: label }).click()
+}
+
+/**
  * Cria uma conta nova pela UI e espera pelo dashboard.
  * Devolve os dados do utilizador criado.
  */

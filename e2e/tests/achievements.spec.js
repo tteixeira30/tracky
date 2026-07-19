@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { registerViaUi, sidebarTab } from './helpers.js'
+import { profileMenuAction, registerViaUi, sidebarTab } from './helpers.js'
 
 test.describe('conquistas', () => {
   test('conta nova começa no nível 1 · Iniciante', async ({ page }) => {
     await registerViaUi(page)
-    await sidebarTab(page, 'Conquistas').click()
+    await profileMenuAction(page, 'Conquistas')
 
     await expect(page.getByRole('heading', { name: /Nível 1 · Iniciante/ })).toBeVisible()
     // nota: entrar na app cria a linha do mês atual → "Organizado" (10 pts) desbloqueia logo
@@ -25,7 +25,7 @@ test.describe('conquistas', () => {
     await expect(page.locator('.goal-title', { hasText: 'Primeiro Objetivo' })).toBeVisible()
 
     // a conquista aparece e os pontos somam: Sonhador (10) + Organizado (10)
-    await sidebarTab(page, 'Conquistas').click()
+    await profileMenuAction(page, 'Conquistas')
     await expect(page.getByText('Sonhador')).toBeVisible()
     await expect(page.getByText('20 pontos')).toBeVisible()
   })
