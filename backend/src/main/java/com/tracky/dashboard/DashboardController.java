@@ -238,7 +238,12 @@ public class DashboardController {
         return (v.signum() >= 0 ? "+" : "") + v.stripTrailingZeros().toPlainString() + "%";
     }
 
+    /**
+     * Emite um token {@code {eur:VALOR}} (valor em EUR) em vez de formatar aqui — o
+     * frontend converte-o para a moeda base e formata (o backend não conhece a moeda
+     * base de apresentação nem a taxa de câmbio).
+     */
     private String fmtEur(BigDecimal v) {
-        return v.setScale(2, RoundingMode.HALF_UP).toPlainString() + " €";
+        return "{eur:" + v.setScale(2, RoundingMode.HALF_UP).toPlainString() + "}";
     }
 }

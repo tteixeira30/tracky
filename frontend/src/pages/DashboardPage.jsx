@@ -23,6 +23,10 @@ const ACTIVITY_ICONS = {
   goal: IconTarget,
 }
 
+/** Substitui os tokens {eur:VALOR} (valor em EUR) do backend pela moeda base formatada. */
+const renderInsight = (text) =>
+  (text || '').replace(/\{eur:(-?\d+(?:\.\d+)?)\}/g, (_, n) => fmtEur(Number(n)))
+
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
@@ -397,7 +401,7 @@ export default function DashboardPage() {
                     <span className="insight-icon"><Icon size={15} /></span>
                     <div>
                       <strong>{ins.title}</strong>
-                      <span>{ins.detail}</span>
+                      <span>{renderInsight(ins.detail)}</span>
                     </div>
                   </li>
                 )

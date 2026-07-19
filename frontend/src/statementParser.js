@@ -85,7 +85,7 @@ function valid(y, mo, d) {
 /** Converte texto monetário ("1.234,56", "-1,234.56", "(12,34)") para número; null se inválido. */
 export function parseAmount(raw) {
   if (raw == null) return null
-  let s = String(raw).trim().replace(/[€$£\s ]/g, '')
+  let s = String(raw).trim().replace(/[€$£\s]/g, '')
   if (!s) return null
   let negative = false
   if (/^\(.*\)$/.test(s)) { negative = true; s = s.slice(1, -1) }

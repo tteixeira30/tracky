@@ -67,4 +67,27 @@ describe('AuthPage', () => {
     expect(await screen.findByText('Erro ao iniciar sessão')).toBeInTheDocument()
     expect(await screen.findByText('Email ou palavra-passe incorretos.')).toBeInTheDocument()
   })
+
+  it('registo com sucesso submete nome, email, palavra-passe e convite', async () => {
+    const jsonRes = (body) => new Response(JSON.stringify(body), { status: 200 })
+    global.fetch = vi.fn((url) => {
+      if (String(url).includes('/auth/register')) {
+        return Promise.resolve(jsonRes({ token: 'tok', user: { name: 'Ana Silva', baseCurrency: 'EUR' } }))
+      }
+      return Promise.resolve(jsonRes({ base: 'EUR', rate: 1 })) // /currency
+    })
+    const user = userEvent.setup()
+    renderAuthPage()
+
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+    await user.type(screen.getByPlaceholderText('O teu nome'), 'Ana Silva')
+    await user.type(screen.getByPlaceholderText('exemplo@email.com'), 'ana@ex.com')
+    await user.type(screen.getByPlaceholderText('Mínimo 6 caracteres'), 'segredo1')
+    await user.click(screen.getAllByRole('button', { name: 'Criar conta' }).at(-1))
+
+    // faz o pedido de registo com o corpo esperado
+    await screen.findByText(/Bem-vindo, Ana!/)
+    const registerCall = fetch.mock.calls.find(([u]) => String(u).includes('/auth/register'))
+    expect(JSON.parse(registerCall[1].body)).toMatchObject({ name: 'Ana Silva', email: 'ana@ex.com' })
+  })
 })
