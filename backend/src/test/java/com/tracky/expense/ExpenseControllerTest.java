@@ -6,6 +6,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -14,13 +16,18 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Testa a chave de categorização (categoryKey) e a propagação de categorias a movimentos semelhantes. */
+/**
+ * Testa a lógica do ExpenseController: chave de categorização, propagação de
+ * categorias a movimentos semelhantes, estatísticas, dedupe de importação,
+ * agregação mensal e o scoping das contas ao utilizador.
+ */
 @ExtendWith(MockitoExtension.class)
 class ExpenseControllerTest {
 
@@ -124,6 +131,115 @@ class ExpenseControllerTest {
 
         // um mês sem movimentos tem categorias vazias (não null)
         assertThat(stats.months().get(0).byCategory()).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void importIgnoraDuplicadosPorContagemEAplicaRegrasDeCategoria() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+
+        Account account = mock(Account.class);
+        when(account.getId()).thenReturn(10L);
+        when(accounts.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(account));
+
+        LocalDate day = LocalDate.of(2026, 7, 5);
+        // já existe UM movimento igual na conta (mesma data, valor, sentido e descrição)
+        Transaction existing = importedTx(day, new BigDecimal("45.30"), false, "Continente");
+        when(transactions.findByUserIdAndAccountIdAndTxDateBetween(1L, 10L, day, day))
+                .thenReturn(List.of(existing));
+        // regra aprendida: qualquer "netflix" é subscrição, independentemente da categoria do ficheiro
+        CategoryRule rule = mock(CategoryRule.class);
+        when(rule.getMatchKey()).thenReturn("netflix");
+        when(rule.getCategory()).thenReturn(Transaction.Category.SUBSCRIPTION);
+        when(rules.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(rule));
+
+        var rows = List.of(
+                new ExpenseController.ImportRow(day, "Continente", new BigDecimal("45.30"), false, "GROCERIES"), // dup do existente → ignorado
+                new ExpenseController.ImportRow(day, "Continente", new BigDecimal("45.30"), false, "GROCERIES"), // 2ª ocorrência → importada
+                new ExpenseController.ImportRow(day, "Netflix", new BigDecimal("12.99"), false, "OTHER"));       // nova → importada (regra sobrepõe → SUBSCRIPTION)
+        ExpenseController.ImportResult result = controller.importRows(user, new ExpenseController.ImportRequest(10L, rows));
+
+        // multiset: o existente absorve só UMA ocorrência do ficheiro
+        assertThat(result.imported()).isEqualTo(2);
+        assertThat(result.skipped()).isEqualTo(1);
+
+        ArgumentCaptor<List<Transaction>> batchCap = ArgumentCaptor.forClass(List.class);
+        verify(transactions).saveAll(batchCap.capture());
+        List<Transaction> saved = batchCap.getValue();
+        assertThat(saved).hasSize(2);
+        assertThat(saved).extracting(Transaction::getDescription).containsExactly("Continente", "Netflix");
+        assertThat(saved).extracting(Transaction::getCategory)
+                .containsExactly(Transaction.Category.GROCERIES, Transaction.Category.SUBSCRIPTION);
+        assertThat(saved.get(0).getAmount()).isEqualByComparingTo("45.30");
+    }
+
+    @Test
+    void monthAgregaEntradasSaidasNetECategoriasSoDeSaida() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+
+        Account account = mock(Account.class);
+        when(account.getId()).thenReturn(10L);
+        when(account.getName()).thenReturn("Santander");
+        when(account.getCurrentBalance()).thenReturn(new BigDecimal("1000.00"));
+        when(accounts.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(account));
+        when(transactions.countByUserIdAndAccountId(1L, 10L)).thenReturn(3L);
+
+        Transaction out1 = txOn(LocalDate.of(2026, 7, 3), new BigDecimal("100"), false, Transaction.Category.GROCERIES);
+        Transaction out2 = txOn(LocalDate.of(2026, 7, 10), new BigDecimal("50"), false, Transaction.Category.TRANSPORT);
+        Transaction in1 = txOn(LocalDate.of(2026, 7, 5), new BigDecimal("1500"), true, Transaction.Category.INCOME);
+        when(transactions.findByUserIdAndTxDateBetweenOrderByTxDateDescIdDesc(
+                1L, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
+                .thenReturn(List.of(out1, out2, in1));
+
+        ExpenseController.MonthSummary summary = controller.month(user, "2026-07", null);
+
+        assertThat(summary.month()).isEqualTo("2026-07");
+        assertThat(summary.inflows()).isEqualByComparingTo("1500");
+        assertThat(summary.outflows()).isEqualByComparingTo("150"); // 100 + 50
+        assertThat(summary.net()).isEqualByComparingTo("1350");      // 1500 − 150
+        assertThat(summary.transactions()).hasSize(3);
+
+        // byCategory só conta saídas, ordenadas por total desc; entradas (INCOME) não entram
+        assertThat(summary.byCategory()).extracting(ExpenseController.CategoryTotal::category)
+                .containsExactly("GROCERIES", "TRANSPORT");
+        assertThat(summary.accounts()).singleElement()
+                .satisfies(a -> {
+                    assertThat(a.name()).isEqualTo("Santander");
+                    assertThat(a.transactionCount()).isEqualTo(3L);
+                    assertThat(a.currentBalance()).isEqualByComparingTo("1000.00");
+                });
+    }
+
+    @Test
+    void criarMovimentoNumaContaDeOutroUtilizadorFalhaComBadRequest() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+        // a conta 99 não pertence a este utilizador
+        when(accounts.findByIdAndUserId(99L, 1L)).thenReturn(Optional.empty());
+
+        var req = new ExpenseController.TransactionRequest(99L, LocalDate.of(2026, 7, 1),
+                "Tentativa", new BigDecimal("10"), false, "OTHER", false);
+
+        assertThatThrownBy(() -> controller.create(user, req))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    private Transaction importedTx(LocalDate date, BigDecimal amount, boolean inflow, String description) {
+        Transaction t = new Transaction();
+        t.setUserId(1L);
+        t.setAccountId(10L);
+        t.setTxDate(date);
+        t.setDescription(description);
+        t.setAmount(amount);
+        t.setInflow(inflow);
+        t.setCategory(Transaction.Category.OTHER);
+        return t;
     }
 
     private Transaction txOn(LocalDate date, BigDecimal amount, boolean inflow, Transaction.Category category) {
