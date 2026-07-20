@@ -9,6 +9,13 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+    properties:
+      hibernate:
+        # Dialeto explícito: o Hibernate não precisa de abrir uma ligação JDBC
+        # só para o descobrir no arranque. Evita o crash "Unable to determine
+        # Dialect without JDBC metadata" quando a DB está momentaneamente
+        # indisponível (deploys, reinícios). Ver docker-entrypoint.sh (wait-for-db).
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
 server:
   port: 8080
