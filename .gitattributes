@@ -1,0 +1,3 @@
+# Scripts shell têm de manter fins de linha LF, senão o shebang parte-se em
+# Linux (ex.: "/bin/sh^M: bad interpreter") quando editados no Windows.
+*.sh text eol=lf
