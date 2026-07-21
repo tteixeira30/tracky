@@ -9,8 +9,8 @@
   --border-strong: #313a4d;
   --text: #eceef4;
   --text-dim: #8b93a7;
-  --text-faint: #5c6478;
-  --accent: #6366f1;
+  --text-faint: #808aa0; /* AA: ≥4.5:1 sobre superfícies escuras (antes #5c6478 falhava) */
+  --accent: #5457ee;     /* AA: texto branco ~5.3:1 (antes #6366f1 dava 4.47) */
   --accent-soft: rgba(99, 102, 241, 0.14);
   --cyan: #22d3ee;
   --green: #10b981;
@@ -39,7 +39,8 @@
   --border-strong: #d2d8e5;
   --text: #1a1e2c;
   --text-dim: #5a6478;
-  --text-faint: #8b93a7;
+  --text-faint: #646d84; /* AA: ≥4.5:1 sobre cartões claros (antes #8b93a7 falhava) */
+  --green: #047d58;      /* AA como texto em fundo claro; o escuro mantém o verde vivo #10b981 */
   --accent-soft: rgba(99, 102, 241, 0.12);
   --green-soft: rgba(16, 185, 129, 0.12);
   --red-soft: rgba(239, 68, 68, 0.11);
