@@ -13,6 +13,9 @@ target/
 .bloop/
 .bsp/
 
+# ferramentas locais do Claude Code (ex: .claude/launch.json do preview)
+.claude/
+
 # testes
 coverage/
 playwright-report/
