@@ -9,7 +9,12 @@ import java.time.Instant;
 @Table(name = "investments")
 public class Investment {
 
-    public enum Type { STOCK, ETF, CRYPTO, OTHER }
+    public enum Type {
+        STOCK, ETF, CRYPTO, PPR, OTHER;
+
+        /** Tipos sem cotação pública (PPR, depósitos…) — o valor é sempre manual. */
+        public boolean isManualOnly() { return this == PPR || this == OTHER; }
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

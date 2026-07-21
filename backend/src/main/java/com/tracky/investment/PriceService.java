@@ -46,7 +46,7 @@ public class PriceService {
 
     /** Preço atual em EUR, ou vazio se não for possível obter. */
     public Optional<BigDecimal> getPriceEur(String symbol, Investment.Type type) {
-        if (symbol == null || symbol.isBlank() || type == Investment.Type.OTHER) return Optional.empty();
+        if (symbol == null || symbol.isBlank() || type == null || type.isManualOnly()) return Optional.empty();
         String key = type + ":" + symbol.toUpperCase(Locale.ROOT);
         Cached<Optional<BigDecimal>> cached = priceCache.get(key);
         if (cached != null && cached.expiresAt() > System.currentTimeMillis()) return cached.value();
@@ -72,7 +72,7 @@ public class PriceService {
      * range: 1mo, 3mo, 6mo, 1y
      */
     public List<PricePoint> getHistoryEur(String symbol, Investment.Type type, String range) {
-        if (symbol == null || symbol.isBlank() || type == Investment.Type.OTHER) return List.of();
+        if (symbol == null || symbol.isBlank() || type == null || type.isManualOnly()) return List.of();
         String key = type + ":" + symbol.toUpperCase(Locale.ROOT) + ":" + range;
         Cached<List<PricePoint>> cached = historyCache.get(key);
         if (cached != null && cached.expiresAt() > System.currentTimeMillis()) return cached.value();
