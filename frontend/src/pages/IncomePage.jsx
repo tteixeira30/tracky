@@ -19,6 +19,19 @@ const fmtMonth = (m) => {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
+// mês atual (AAAA-MM) e aritmética de meses sobre strings AAAA-MM
+const currentMonth = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+const shiftMonth = (m, delta) => {
+  const [y, mo] = m.split('-').map(Number)
+  const d = new Date(y, mo - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+// quantos meses atrás se pode recuar para introduzir rendimento em falta
+const MONTHS_BACK = 3
+
 function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   return (
@@ -200,8 +213,14 @@ export default function IncomePage() {
   if (Number(data.unallocated) > 0.005) pieData.push({ name: 'Não alocado', value: Number(data.unallocated), color: COLORS[pieData.length % COLORS.length] })
   const donutTotal = pieData.reduce((s, d) => s + d.value, 0)
 
-  // navegação entre meses com dados
-  const months = data.availableMonths ?? []
+  // navegação por meses: conjunto = meses que já têm dados ∪ janela recente
+  // (mês atual e os MONTHS_BACK anteriores, para introduzir rendimento em falta).
+  // Movemo-nos por este conjunto ordenado, sem passar por meses vazios distantes.
+  const now = currentMonth()
+  const backWindow = Array.from({ length: MONTHS_BACK + 1 }, (_, i) => shiftMonth(now, -i))
+  const months = [...new Set([...(data.availableMonths ?? []), ...backWindow, data.month])]
+    .filter((m) => m <= now)   // nunca avançar para além do mês atual
+    .sort()
   const monthIdx = months.indexOf(data.month)
   const prevMonth = monthIdx > 0 ? months[monthIdx - 1] : null
   const nextMonth = monthIdx >= 0 && monthIdx < months.length - 1 ? months[monthIdx + 1] : null
@@ -229,7 +248,8 @@ export default function IncomePage() {
         <div className="page-actions">
           <div className="month-nav">
             <button className="icon-btn" onClick={() => goTo(prevMonth)} disabled={!prevMonth}
-                    aria-label="Mês anterior" title={prevMonth ? fmtMonth(prevMonth) : 'Sem meses anteriores'}>
+                    aria-label="Mês anterior"
+                    title={prevMonth ? fmtMonth(prevMonth) : `Só podes recuar até ${MONTHS_BACK} meses atrás`}>
               <IconChevronLeft size={17} />
             </button>
             <div className="month-label">
