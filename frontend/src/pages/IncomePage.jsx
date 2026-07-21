@@ -50,6 +50,7 @@ export default function IncomePage() {
   const [incomeInput, setIncomeInput] = useState('')
   const [allocModal, setAllocModal] = useState(false)
   const [allocForm, setAllocForm] = useState(EMPTY_ALLOC)
+  const [allocBaseline, setAllocBaseline] = useState(EMPTY_ALLOC)   // estado do form ao abrir (para detetar alterações)
   const [allocEditId, setAllocEditId] = useState(null)   // null = adicionar; id = editar
   const [toDelete, setToDelete] = useState(null)
   const [expanded, setExpanded] = useState(() => new Set())
@@ -87,23 +88,29 @@ export default function IncomePage() {
   const openAddAlloc = () => {
     // por omissão sugere a próxima cor da paleta ainda "livre" pela ordem das categorias
     const nextColor = COLORS[(data?.allocations?.length ?? 0) % COLORS.length]
+    const form = { ...EMPTY_ALLOC, color: nextColor }
     setAllocEditId(null)
-    setAllocForm({ ...EMPTY_ALLOC, color: nextColor })
+    setAllocForm(form)
+    setAllocBaseline(form)
     setAllocModal(true)
   }
 
   const openEditAlloc = (a, i) => {
-    setAllocEditId(a.id)
-    setAllocForm({
+    const form = {
       name: a.name,
       mode: a.fixedAmount != null ? 'fixed' : 'percentage',
       value: String(a.fixedAmount != null ? fromEur(a.fixedAmount) : a.percentage),
       color: allocColor(a, i),
-    })
+    }
+    setAllocEditId(a.id)
+    setAllocForm(form)
+    setAllocBaseline(form)
     setAllocModal(true)
   }
 
   const closeAllocModal = () => { setAllocModal(false); setAllocEditId(null); setAllocForm(EMPTY_ALLOC) }
+  // form "sujo" = difere do estado com que foi aberto (para avisar antes de descartar)
+  const allocDirty = JSON.stringify(allocForm) !== JSON.stringify(allocBaseline)
 
   const saveAlloc = async () => {
     const value = Number(allocForm.value)
@@ -487,7 +494,7 @@ export default function IncomePage() {
         </div>
       </Modal>
 
-      <Modal open={allocModal} onClose={closeAllocModal}
+      <Modal open={allocModal} onClose={closeAllocModal} dirty={allocDirty}
              title={allocEditId ? 'Editar categoria' : 'Nova categoria'}
              subtitle={allocEditId
                ? `Ajusta a categoria de ${fmtMonth(data.month)}.`
