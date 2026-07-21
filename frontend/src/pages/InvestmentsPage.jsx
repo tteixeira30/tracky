@@ -18,10 +18,13 @@ const TYPES = [
   { id: 'STOCK', label: 'Ação' },
   { id: 'ETF', label: 'ETF' },
   { id: 'CRYPTO', label: 'Cripto' },
+  { id: 'PPR', label: 'PPR' },
   { id: 'OTHER', label: 'Outro' },
 ]
 
 const typeLabel = (t) => TYPES.find((x) => x.id === t)?.label ?? t
+// tipos sem cotação pública — símbolo não aplicável, valor sempre manual
+const isManualType = (t) => t === 'PPR' || t === 'OTHER'
 
 const EMPTY_FORM = { name: '', symbol: '', type: 'ETF', currentValue: '', gainPercent: '', monthlyContribution: '', contributionDay: '1' }
 
@@ -196,7 +199,7 @@ export default function InvestmentsPage() {
     try {
       await api.updateInvestment(editing.id, {
         name: editForm.name.trim(),
-        symbol: editForm.type === 'OTHER' ? null : (editForm.symbol.trim() || null),
+        symbol: isManualType(editForm.type) ? null : (editForm.symbol.trim() || null),
         type: editForm.type,
         currentValue: toEur(Number(editForm.currentValue)),
         gainPercent: Number(editForm.gainPercent) || 0,
@@ -558,17 +561,19 @@ export default function InvestmentsPage() {
                       options={TYPES.map((t) => ({ value: t.id, label: t.label }))} />
           </div>
           <div className="field">
-            <label>Símbolo {form.type === 'OTHER' && <span className="dim">(não aplicável)</span>}</label>
+            <label>Símbolo {isManualType(form.type) && <span className="dim">(não aplicável)</span>}</label>
             <input placeholder={form.type === 'CRYPTO' ? 'Ex: BTC, ETH' : 'Ex: VWCE.DE, AAPL'}
-                   disabled={form.type === 'OTHER'}
-                   value={form.type === 'OTHER' ? '' : form.symbol}
+                   disabled={isManualType(form.type)}
+                   value={isManualType(form.type) ? '' : form.symbol}
                    onChange={(e) => setForm({ ...form, symbol: e.target.value })} />
             <span className="hint">
               {form.type === 'CRYPTO'
                 ? 'Símbolo da moeda no CoinGecko.'
-                : form.type === 'OTHER'
-                  ? 'Investimentos sem cotação pública (depósitos, PPR…).'
-                  : 'Ticker do Yahoo Finance — inclui o sufixo da bolsa se aplicável.'}
+                : form.type === 'PPR'
+                  ? 'Os PPR não têm cotação pública — o valor é atualizado manualmente.'
+                  : form.type === 'OTHER'
+                    ? 'Investimentos sem cotação pública (depósitos, PPR…).'
+                    : 'Ticker do Yahoo Finance — inclui o sufixo da bolsa se aplicável.'}
             </span>
           </div>
           <div className="field">
@@ -641,17 +646,19 @@ export default function InvestmentsPage() {
                       options={TYPES.map((t) => ({ value: t.id, label: t.label }))} />
           </div>
           <div className="field">
-            <label>Símbolo {editForm.type === 'OTHER' && <span className="dim">(não aplicável)</span>}</label>
+            <label>Símbolo {isManualType(editForm.type) && <span className="dim">(não aplicável)</span>}</label>
             <input placeholder={editForm.type === 'CRYPTO' ? 'Ex: BTC, ETH' : 'Ex: VWCE.DE, AAPL'}
-                   disabled={editForm.type === 'OTHER'}
-                   value={editForm.type === 'OTHER' ? '' : editForm.symbol}
+                   disabled={isManualType(editForm.type)}
+                   value={isManualType(editForm.type) ? '' : editForm.symbol}
                    onChange={(e) => setEditForm({ ...editForm, symbol: e.target.value })} />
             <span className="hint">
               {editForm.type === 'CRYPTO'
                 ? 'Símbolo da moeda no CoinGecko.'
-                : editForm.type === 'OTHER'
-                  ? 'Investimentos sem cotação pública (depósitos, PPR…).'
-                  : 'Ticker do Yahoo Finance — inclui o sufixo da bolsa se aplicável.'}
+                : editForm.type === 'PPR'
+                  ? 'Os PPR não têm cotação pública — o valor é atualizado manualmente.'
+                  : editForm.type === 'OTHER'
+                    ? 'Investimentos sem cotação pública (depósitos, PPR…).'
+                    : 'Ticker do Yahoo Finance — inclui o sufixo da bolsa se aplicável.'}
             </span>
           </div>
           <div className="field">

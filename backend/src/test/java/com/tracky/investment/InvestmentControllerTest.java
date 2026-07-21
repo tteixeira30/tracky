@@ -262,6 +262,34 @@ class InvestmentControllerTest {
         assertThat(inv.getLastAppliedMonth()).isEqualTo("2025-06"); // intocado
     }
 
+    // ---------- tipos sem cotação (PPR / Outro) ----------
+
+    @Test
+    void ppRIgnoraOSimboloEFicaManual() {
+        // um símbolo indicado por engano num PPR não deve ativar cotação em tempo real
+        lenient().when(priceService.getPriceEur(any(), any())).thenReturn(Optional.of(new BigDecimal("50")));
+        when(repo.save(any(Investment.class))).thenAnswer(a -> a.getArgument(0));
+
+        var dto = controller.create(user, new InvestmentController.CreateRequest(
+                "PPR Ageas", "AAPL", Investment.Type.PPR, new BigDecimal("5000"),
+                new BigDecimal("8"), null, null));
+
+        assertThat(dto.type()).isEqualTo(Investment.Type.PPR);
+        assertThat(dto.symbol()).isNull();            // símbolo descartado
+        assertThat(dto.quantity()).isNull();          // sem unidades → sem preço live
+        assertThat(dto.live()).isFalse();
+        assertThat(dto.initialValue()).isEqualByComparingTo("4629.63"); // 5000 / 1.08
+    }
+
+    @Test
+    void tiposManuaisSaoApenasPprEOutro() {
+        assertThat(Investment.Type.PPR.isManualOnly()).isTrue();
+        assertThat(Investment.Type.OTHER.isManualOnly()).isTrue();
+        assertThat(Investment.Type.STOCK.isManualOnly()).isFalse();
+        assertThat(Investment.Type.ETF.isManualOnly()).isFalse();
+        assertThat(Investment.Type.CRYPTO.isManualOnly()).isFalse();
+    }
+
     @Test
     void refreshLimpaACacheDosAtivosDoUtilizador() {
         Investment inv = liveInvestment("ETF", "AAA", "10");

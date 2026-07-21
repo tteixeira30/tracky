@@ -97,7 +97,7 @@ public class InvestmentController {
     }
 
     private String normalizeSymbol(String symbol, Investment.Type type) {
-        if (type == Investment.Type.OTHER || symbol == null || symbol.isBlank()) return null;
+        if (type != null && type.isManualOnly() || symbol == null || symbol.isBlank()) return null;
         return symbol.trim().toUpperCase();
     }
 
@@ -112,7 +112,7 @@ public class InvestmentController {
         if (factor.signum() <= 0) throw new IllegalArgumentException("Percentagem de ganho inválida");
         inv.setInitialValue(currentValue.divide(factor, 4, RoundingMode.HALF_UP));
         inv.setQuantity(null);
-        if (inv.getSymbol() != null && inv.getType() != Investment.Type.OTHER) {
+        if (inv.getSymbol() != null && inv.getType() != null && !inv.getType().isManualOnly()) {
             priceService.getPriceEur(inv.getSymbol(), inv.getType()).ifPresent(price -> {
                 if (price.signum() > 0) {
                     inv.setQuantity(currentValue.divide(price, 8, RoundingMode.HALF_UP));
