@@ -1489,6 +1489,13 @@ tr.subrow:focus-within .subrow-actions .icon-btn { opacity: 1; }
   background: var(--surface-2); padding: 6px 7px; display: flex; flex-direction: column; gap: 5px;
 }
 .cal-cell.empty { background: transparent; border-color: transparent; }
+.cal-cell[role="button"] { cursor: pointer; transition: border-color .12s, background .12s; position: relative; }
+.cal-cell[role="button"]:hover { border-color: var(--accent); }
+.cal-cell[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cal-cell[role="button"]:hover::after {
+  content: '+'; position: absolute; top: 4px; right: 6px;
+  font-size: 14px; font-weight: 700; line-height: 1; color: var(--accent);
+}
 .cal-cell.today { border-color: var(--accent); background: var(--accent-soft); }
 .cal-daynum { font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
 .cal-cell.today .cal-daynum { color: var(--accent); }

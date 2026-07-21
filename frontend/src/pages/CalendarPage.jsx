@@ -68,6 +68,12 @@ export default function CalendarPage() {
   const reloadAll = async () => { await Promise.all([loadMonth(month), loadForecast()]) }
 
   const openAdd = () => { setEditing(null); setForm(EMPTY_FORM); setAddModal(true) }
+  const openAddForDay = (day) => {
+    const iso = `${month}-${String(day).padStart(2, '0')}`
+    setEditing(null)
+    setForm({ ...EMPTY_FORM, dayOfMonth: String(day), eventDate: iso })
+    setAddModal(true)
+  }
   const openEdit = (e) => {
     setEditing(e)
     setForm({
@@ -193,7 +199,13 @@ export default function CalendarPage() {
         <div className="cal-grid">
           {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
           {grid.map((cell, i) => (
-            <div key={i} className={`cal-cell ${cell ? '' : 'empty'} ${cell && isToday(cell.day) ? 'today' : ''}`}>
+            <div key={i}
+                 className={`cal-cell ${cell ? '' : 'empty'} ${cell && isToday(cell.day) ? 'today' : ''}`}
+                 role={cell ? 'button' : undefined}
+                 tabIndex={cell ? 0 : undefined}
+                 aria-label={cell ? `Adicionar evento no dia ${cell.day}` : undefined}
+                 onClick={cell ? () => openAddForDay(cell.day) : undefined}
+                 onKeyDown={cell ? (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openAddForDay(cell.day) } } : undefined}>
               {cell && (
                 <>
                   <span className="cal-daynum">{cell.day}</span>
