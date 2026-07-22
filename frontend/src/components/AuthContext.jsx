@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { api, getToken, setToken, clearToken, setOnUnauthorized, setDisplayCurrency } from '../api'
+import { setCustomCategories } from '../categories'
 
 const AuthContext = createContext(null)
 
@@ -19,6 +20,15 @@ async function applyCurrency(fallback = 'EUR') {
   }
 }
 
+/** Carrega as categorias personalizadas do utilizador para o registo global. */
+async function applyCategories() {
+  try {
+    setCustomCategories(await api.getExpenseCategories())
+  } catch {
+    setCustomCategories([])
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -34,6 +44,7 @@ export function AuthProvider({ children }) {
       .then(async (u) => {
         setUser(u)
         setBaseCurrency(await applyCurrency(u.baseCurrency))
+        await applyCategories()
       })
       .catch(() => clearToken())
       .finally(() => setLoading(false))
@@ -43,6 +54,7 @@ export function AuthProvider({ children }) {
     setToken(res.token)
     setUser(res.user)
     setBaseCurrency(await applyCurrency(res.user.baseCurrency))
+    await applyCategories()
     return res.user
   }
 
@@ -56,6 +68,7 @@ export function AuthProvider({ children }) {
     setUser(null)
     setDisplayCurrency('EUR', 1)
     setBaseCurrency('EUR')
+    setCustomCategories([])
   }
 
   const changeCurrency = async (currency) => {

@@ -105,6 +105,12 @@ export const api = {
   deleteTransaction: (id) => request(`/expenses/transactions/${id}`, { method: 'DELETE' }),
   importTransactions: (data) => request('/expenses/import', { method: 'POST', body: JSON.stringify(data) }),
   getCategoryRules: () => request('/expenses/rules'),
+
+  // Categorias de despesa personalizadas (as por omissão vivem em categories.js)
+  getExpenseCategories: () => request('/expenses/categories'),
+  addExpenseCategory: (data) => request('/expenses/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateExpenseCategory: (id, data) => request(`/expenses/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteExpenseCategory: (id) => request(`/expenses/categories/${id}`, { method: 'DELETE' }),
 }
 
 // ---------- Modo privacidade ----------
