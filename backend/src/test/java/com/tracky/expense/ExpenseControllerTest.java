@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -229,6 +230,135 @@ class ExpenseControllerTest {
         assertThatThrownBy(() -> controller.create(user, req))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    void criarCategoriaGeraChaveNormalizadaEValidaCor() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules, categories);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+        when(categories.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of()); // makeKey: nenhuma existente
+        when(categories.save(any(ExpenseCategory.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // acentos e pontuação → chave em maiúsculas sem acentos; cor inválida → cor por omissão
+        var semCor = controller.createCategory(user, new ExpenseController.CategoryRequest("  Educação!  ", null));
+        // cor hex válida é aceite (normalizada para minúsculas)
+        var comCor = controller.createCategory(user, new ExpenseController.CategoryRequest("Ginásio", "#ABCDEF"));
+
+        ArgumentCaptor<ExpenseCategory> cap = ArgumentCaptor.forClass(ExpenseCategory.class);
+        verify(categories, times(2)).save(cap.capture());
+        List<ExpenseCategory> saved = cap.getAllValues();
+
+        assertThat(saved.get(0).getCatKey()).isEqualTo("EDUCACAO");
+        assertThat(saved.get(0).getLabel()).isEqualTo("Educação!");   // label preserva o texto (trim)
+        assertThat(saved.get(0).getColor()).isEqualTo("#94a3b8");     // cor por omissão
+        assertThat(saved.get(1).getCatKey()).isEqualTo("GINASIO");
+        assertThat(saved.get(1).getColor()).isEqualTo("#abcdef");
+
+        assertThat(semCor.key()).isEqualTo("EDUCACAO");
+        assertThat(comCor.color()).isEqualTo("#abcdef");
+    }
+
+    @Test
+    void criarCategoriaComChaveJaExistenteRecebeSufixo() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules, categories);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+        // já existe uma categoria personalizada com a chave "GINASIO"
+        when(categories.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(cat("GINASIO")));
+        when(categories.save(any(ExpenseCategory.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var dto = controller.createCategory(user, new ExpenseController.CategoryRequest("Ginásio", "#22d3ee"));
+
+        // não colide: recebe sufixo numérico
+        assertThat(dto.key()).isEqualTo("GINASIO_2");
+    }
+
+    @Test
+    void criarCategoriaSemNomeFalhaComBadRequest() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules, categories);
+        User user = mock(User.class);
+
+        assertThatThrownBy(() -> controller.createCategory(user, new ExpenseController.CategoryRequest("   ", "#22d3ee")))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verify(categories, times(0)).save(any());
+    }
+
+    @Test
+    void movimentoAceitaCategoriaPersonalizadaDoUtilizadorERejeitaDesconhecida() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules, categories);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+        Account account = mock(Account.class);
+        when(account.getId()).thenReturn(10L);
+        when(account.getName()).thenReturn("Santander");
+        when(accounts.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(account));
+        when(transactions.save(any(Transaction.class))).thenAnswer(inv -> inv.getArgument(0));
+        // "EDUCACAO" é uma categoria personalizada do utilizador; "BOGUS" não existe
+        when(categories.findByUserIdAndCatKey(1L, "EDUCACAO")).thenReturn(Optional.of(cat("EDUCACAO")));
+        when(categories.findByUserIdAndCatKey(1L, "BOGUS")).thenReturn(Optional.empty());
+
+        var okReq = new ExpenseController.TransactionRequest(10L, LocalDate.of(2026, 7, 15),
+                "Explicações", new BigDecimal("40"), false, "EDUCACAO", false);
+        var badReq = new ExpenseController.TransactionRequest(10L, LocalDate.of(2026, 7, 16),
+                "Coisa", new BigDecimal("5"), false, "BOGUS", false);
+
+        assertThat(controller.create(user, okReq).category()).isEqualTo("EDUCACAO");
+        // categoria inexistente (ou de outro utilizador) → OTHER
+        assertThat(controller.create(user, badReq).category()).isEqualTo("OTHER");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void eliminarCategoriaReatribuiMovimentosAOutrosERemoveRegras() {
+        ExpenseController controller = new ExpenseController(accounts, transactions, rules, categories);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+
+        ExpenseCategory ginasio = cat("GINASIO");
+        when(categories.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(ginasio));
+
+        Transaction doGinasio = txOn(LocalDate.of(2026, 7, 1), new BigDecimal("30"), false, "GINASIO");
+        Transaction outra = txOn(LocalDate.of(2026, 7, 2), new BigDecimal("10"), false, "GROCERIES");
+        when(transactions.findByUserId(1L)).thenReturn(List.of(doGinasio, outra));
+
+        CategoryRule regraGinasio = ruleWith("GINASIO");
+        CategoryRule regraOutra = ruleWith("GROCERIES");
+        when(rules.findByUserIdOrderByIdAsc(1L)).thenReturn(List.of(regraGinasio, regraOutra));
+
+        controller.deleteCategory(user, 5L);
+
+        // só os movimentos da categoria eliminada passam a OTHER; os restantes ficam intactos
+        assertThat(doGinasio.getCategory()).isEqualTo("OTHER");
+        assertThat(outra.getCategory()).isEqualTo("GROCERIES");
+        ArgumentCaptor<List<Transaction>> savedCap = ArgumentCaptor.forClass(List.class);
+        verify(transactions).saveAll(savedCap.capture());
+        assertThat(savedCap.getValue()).containsExactly(doGinasio);
+
+        // só as regras que apontavam para a categoria eliminada são removidas
+        ArgumentCaptor<List<CategoryRule>> delCap = ArgumentCaptor.forClass(List.class);
+        verify(rules).deleteAll(delCap.capture());
+        assertThat(delCap.getValue()).containsExactly(regraGinasio);
+
+        verify(categories).delete(ginasio);
+    }
+
+    private ExpenseCategory cat(String key) {
+        ExpenseCategory c = new ExpenseCategory();
+        c.setUserId(1L);
+        c.setCatKey(key);
+        c.setLabel(key);
+        c.setColor("#000000");
+        return c;
+    }
+
+    private CategoryRule ruleWith(String category) {
+        CategoryRule r = new CategoryRule();
+        r.setUserId(1L);
+        r.setMatchKey("chave-" + category);
+        r.setCategory(category);
+        return r;
     }
 
     private Transaction importedTx(LocalDate date, BigDecimal amount, boolean inflow, String description) {
