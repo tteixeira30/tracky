@@ -132,7 +132,6 @@ export default function ExpensesPage() {
 
   // ---------- categorias personalizadas ----------
 
-  const openCatAdd = () => { setCatForm({ id: null, label: '', color: CATEGORY_COLORS[0] }); setCatModal(true) }
   const openCatEdit = (c) => { setCatForm({ id: c.id, label: c.label, color: c.color }); setCatModal(true) }
 
   const saveCat = async () => {
