@@ -82,4 +82,19 @@ describe('endpoints da API', () => {
     expect((await call(() => api.getAchievements())).url).toBe('/api/achievements')
     expect((await call(() => api.getDashboard())).url).toBe('/api/dashboard')
   })
+
+  it('despesas: categorias personalizadas (CRUD)', async () => {
+    expect((await call(() => api.getExpenseCategories())).url).toBe('/api/expenses/categories')
+
+    const add = await call(() => api.addExpenseCategory({ label: 'Educação', color: '#22d3ee' }))
+    expect(add).toMatchObject({
+      url: '/api/expenses/categories', method: 'POST', body: { label: 'Educação', color: '#22d3ee' },
+    })
+
+    const upd = await call(() => api.updateExpenseCategory(7, { label: 'Formação', color: '#4ade80' }))
+    expect(upd).toMatchObject({ url: '/api/expenses/categories/7', method: 'PUT', body: { label: 'Formação', color: '#4ade80' } })
+
+    const del = await call(() => api.deleteExpenseCategory(7))
+    expect(del).toMatchObject({ url: '/api/expenses/categories/7', method: 'DELETE' })
+  })
 })

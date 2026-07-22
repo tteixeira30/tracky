@@ -28,15 +28,24 @@ import java.util.*;
 @RequestMapping("/api/expenses")
 public class ExpenseController {
 
+    /** Chaves das categorias por omissão — têm de acompanhar categories.js no frontend. */
+    static final Set<String> DEFAULT_KEYS = Set.of(
+            "INCOME", "GROCERIES", "RESTAURANT", "TRANSPORT", "HOUSING", "SUBSCRIPTION",
+            "SHOPPING", "HEALTH", "LEISURE", "TRANSFER", "OTHER");
+
+    private static final String DEFAULT_COLOR = "#94a3b8";
+
     private final AccountRepository accounts;
     private final TransactionRepository transactions;
     private final CategoryRuleRepository rules;
+    private final ExpenseCategoryRepository categories;
 
     public ExpenseController(AccountRepository accounts, TransactionRepository transactions,
-                             CategoryRuleRepository rules) {
+                             CategoryRuleRepository rules, ExpenseCategoryRepository categories) {
         this.accounts = accounts;
         this.transactions = transactions;
         this.rules = rules;
+        this.categories = categories;
     }
 
     /** currentBalance opcional, em EUR; null = limpar/não definido. */
@@ -47,6 +56,9 @@ public class ExpenseController {
                                      @NotNull @Positive BigDecimal amount, boolean inflow, String category,
                                      Boolean applyToSimilar) {}
     public record RuleDto(Long id, String matchKey, String category) {}
+    /** Categoria personalizada do utilizador (as por omissão não têm entidade). */
+    public record CategoryDto(Long id, String key, String label, String color) {}
+    public record CategoryRequest(@NotBlank String label, String color) {}
     public record TransactionDto(Long id, Long accountId, String accountName, LocalDate date, String description,
                                  BigDecimal amount, boolean inflow, String category) {}
     public record ImportRow(@NotNull LocalDate date, @NotBlank String description,
@@ -122,7 +134,7 @@ public class ExpenseController {
             if (t.isInflow()) in = in.add(t.getAmount());
             else {
                 out = out.add(t.getAmount());
-                byCategory.merge(t.getCategory().name(), t.getAmount(), BigDecimal::add);
+                byCategory.merge(t.getCategory(), t.getAmount(), BigDecimal::add);
             }
         }
         List<CategoryTotal> categories = byCategory.entrySet().stream()
@@ -164,9 +176,9 @@ public class ExpenseController {
             } else {
                 outByMonth.merge(key, t.getAmount(), BigDecimal::add);
                 yearOut = yearOut.add(t.getAmount());
-                byCategory.merge(t.getCategory().name(), t.getAmount(), BigDecimal::add);
+                byCategory.merge(t.getCategory(), t.getAmount(), BigDecimal::add);
                 catByMonth.computeIfAbsent(key, k -> new HashMap<>())
-                        .merge(t.getCategory().name(), t.getAmount(), BigDecimal::add);
+                        .merge(t.getCategory(), t.getAmount(), BigDecimal::add);
             }
         }
 
@@ -191,7 +203,7 @@ public class ExpenseController {
         Transaction t = new Transaction();
         t.setUserId(user.getId());
         t.setAccountId(a.getId());
-        apply(t, req);
+        apply(user, t, req);
         TransactionDto dto = toDto(transactions.save(t), Map.of(a.getId(), a.getName()));
         if (Boolean.TRUE.equals(req.applyToSimilar())) applyCategoryRule(user, t.getDescription(), t.getCategory());
         return dto;
@@ -203,7 +215,7 @@ public class ExpenseController {
         Transaction t = transactions.findByIdAndUserId(id, user.getId()).orElseThrow();
         Account a = requireAccount(user, req.accountId());
         t.setAccountId(a.getId());
-        apply(t, req);
+        apply(user, t, req);
         TransactionDto dto = toDto(transactions.save(t), Map.of(a.getId(), a.getName()));
         if (Boolean.TRUE.equals(req.applyToSimilar())) applyCategoryRule(user, t.getDescription(), t.getCategory());
         return dto;
@@ -214,7 +226,7 @@ public class ExpenseController {
     @GetMapping("/rules")
     public List<RuleDto> listRules(@AuthenticationPrincipal User user) {
         return rules.findByUserIdOrderByIdAsc(user.getId()).stream()
-                .map(r -> new RuleDto(r.getId(), r.getMatchKey(), r.getCategory().name())).toList();
+                .map(r -> new RuleDto(r.getId(), r.getMatchKey(), r.getCategory())).toList();
     }
 
     @DeleteMapping("/rules/{id}")
@@ -226,7 +238,7 @@ public class ExpenseController {
      * Memoriza a regra descrição→categoria e propaga a categoria a todos os
      * movimentos do utilizador com a mesma descrição normalizada.
      */
-    private void applyCategoryRule(User user, String description, Transaction.Category category) {
+    private void applyCategoryRule(User user, String description, String category) {
         String key = categoryKey(description);
         if (key.isEmpty()) return;
 
@@ -240,7 +252,7 @@ public class ExpenseController {
         rules.save(rule);
 
         List<Transaction> toUpdate = transactions.findByUserId(user.getId()).stream()
-                .filter(t -> key.equals(categoryKey(t.getDescription())) && t.getCategory() != category)
+                .filter(t -> key.equals(categoryKey(t.getDescription())) && !category.equals(t.getCategory()))
                 .peek(t -> t.setCategory(category))
                 .toList();
         transactions.saveAll(toUpdate);
@@ -249,6 +261,58 @@ public class ExpenseController {
     @DeleteMapping("/transactions/{id}")
     public void delete(@AuthenticationPrincipal User user, @PathVariable Long id) {
         transactions.findByIdAndUserId(id, user.getId()).ifPresent(transactions::delete);
+    }
+
+    // ---------- Categorias personalizadas ----------
+
+    @GetMapping("/categories")
+    public List<CategoryDto> listCategories(@AuthenticationPrincipal User user) {
+        return categories.findByUserIdOrderByIdAsc(user.getId()).stream().map(ExpenseController::toDto).toList();
+    }
+
+    @PostMapping("/categories")
+    public CategoryDto createCategory(@AuthenticationPrincipal User user, @Valid @RequestBody CategoryRequest req) {
+        String label = req.label() == null ? "" : req.label().trim();
+        if (label.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica o nome da categoria.");
+        ExpenseCategory c = new ExpenseCategory();
+        c.setUserId(user.getId());
+        c.setCatKey(makeKey(user, label));
+        c.setLabel(truncateLabel(label));
+        c.setColor(normalizeColor(req.color()));
+        return toDto(categories.save(c));
+    }
+
+    @PutMapping("/categories/{id}")
+    public CategoryDto updateCategory(@AuthenticationPrincipal User user, @PathVariable Long id,
+                                      @Valid @RequestBody CategoryRequest req) {
+        ExpenseCategory c = categories.findByIdAndUserId(id, user.getId()).orElseThrow();
+        String label = req.label() == null ? "" : req.label().trim();
+        if (label.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica o nome da categoria.");
+        c.setLabel(truncateLabel(label));
+        c.setColor(normalizeColor(req.color()));
+        return toDto(categories.save(c));
+    }
+
+    /**
+     * Elimina uma categoria personalizada: os movimentos e regras que a usavam
+     * passam a "OTHER" (as categorias por omissão não podem ser eliminadas).
+     */
+    @DeleteMapping("/categories/{id}")
+    @Transactional
+    public void deleteCategory(@AuthenticationPrincipal User user, @PathVariable Long id) {
+        categories.findByIdAndUserId(id, user.getId()).ifPresent(c -> {
+            String key = c.getCatKey();
+            List<Transaction> affected = transactions.findByUserId(user.getId()).stream()
+                    .filter(t -> key.equals(t.getCategory()))
+                    .peek(t -> t.setCategory("OTHER"))
+                    .toList();
+            transactions.saveAll(affected);
+            List<CategoryRule> ruleHits = rules.findByUserIdOrderByIdAsc(user.getId()).stream()
+                    .filter(r -> key.equals(r.getCategory()))
+                    .toList();
+            rules.deleteAll(ruleHits);
+            categories.delete(c);
+        });
     }
 
     /**
@@ -271,7 +335,7 @@ public class ExpenseController {
         }
 
         // regras de categorização aprendidas têm prioridade sobre a categoria vinda do frontend
-        Map<String, Transaction.Category> ruleMap = new HashMap<>();
+        Map<String, String> ruleMap = new HashMap<>();
         for (CategoryRule r : rules.findByUserIdOrderByIdAsc(user.getId())) ruleMap.put(r.getMatchKey(), r.getCategory());
 
         int imported = 0, skipped = 0;
@@ -291,8 +355,8 @@ public class ExpenseController {
             t.setDescription(truncate(row.description().trim()));
             t.setAmount(row.amount().setScale(2, RoundingMode.HALF_UP));
             t.setInflow(row.inflow());
-            Transaction.Category ruled = ruleMap.get(categoryKey(row.description()));
-            t.setCategory(ruled != null ? ruled : parseCategory(row.category()));
+            String ruled = ruleMap.get(categoryKey(row.description()));
+            t.setCategory(ruled != null ? ruled : resolveCategory(user, row.category()));
             batch.add(t);
             imported++;
         }
@@ -315,12 +379,12 @@ public class ExpenseController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Conta inexistente."));
     }
 
-    private void apply(Transaction t, TransactionRequest req) {
+    private void apply(User user, Transaction t, TransactionRequest req) {
         t.setTxDate(req.date());
         t.setDescription(truncate(req.description().trim()));
         t.setAmount(req.amount().setScale(2, RoundingMode.HALF_UP));
         t.setInflow(req.inflow());
-        t.setCategory(parseCategory(req.category()));
+        t.setCategory(resolveCategory(user, req.category()));
     }
 
     private static YearMonth parseMonth(String month) {
@@ -332,17 +396,58 @@ public class ExpenseController {
         }
     }
 
-    private static Transaction.Category parseCategory(String category) {
-        if (category == null || category.isBlank()) return Transaction.Category.OTHER;
-        try {
-            return Transaction.Category.valueOf(category.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return Transaction.Category.OTHER;
-        }
+    /**
+     * Resolve a chave de categoria vinda do cliente: aceita as categorias por
+     * omissão e as personalizadas do próprio utilizador; qualquer outra cai em
+     * "OTHER" (defensivo contra chaves inválidas ou de outro utilizador).
+     */
+    private String resolveCategory(User user, String category) {
+        if (category == null || category.isBlank()) return "OTHER";
+        String c = category.trim();
+        if (DEFAULT_KEYS.contains(c)) return c;
+        if (categories.findByUserIdAndCatKey(user.getId(), c).isPresent()) return c;
+        return "OTHER";
     }
 
     private static String truncate(String s) {
         return s.length() > 500 ? s.substring(0, 500) : s;
+    }
+
+    private static String truncateLabel(String s) {
+        return s.length() > 60 ? s.substring(0, 60) : s;
+    }
+
+    /** Aceita uma cor hex #rrggbb; qualquer outra coisa cai na cor por omissão. */
+    private static String normalizeColor(String color) {
+        if (color == null) return DEFAULT_COLOR;
+        String c = color.trim();
+        return c.matches("#[0-9a-fA-F]{6}") ? c.toLowerCase(Locale.ROOT) : DEFAULT_COLOR;
+    }
+
+    /**
+     * Gera uma chave estável e única (por utilizador) a partir do nome: sem acentos,
+     * maiúsculas, só letras/dígitos (o resto vira "_"). Evita colidir com as chaves
+     * por omissão e com outras categorias do mesmo utilizador.
+     */
+    private String makeKey(User user, String label) {
+        String base = java.text.Normalizer.normalize(label, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z0-9]+", "_")
+                .replaceAll("^_+|_+$", "");
+        if (base.isEmpty()) base = "CAT";
+        if (base.length() > 50) base = base.substring(0, 50);
+
+        Set<String> taken = new HashSet<>(DEFAULT_KEYS);
+        categories.findByUserIdOrderByIdAsc(user.getId()).forEach(c -> taken.add(c.getCatKey()));
+        String key = base;
+        int n = 2;
+        while (taken.contains(key)) key = base + "_" + n++;
+        return key;
+    }
+
+    private static CategoryDto toDto(ExpenseCategory c) {
+        return new CategoryDto(c.getId(), c.getCatKey(), c.getLabel(), c.getColor());
     }
 
     /** Normalização de descrições para dedupe (comparação exata entre movimentos). */
@@ -381,6 +486,6 @@ public class ExpenseController {
 
     private static TransactionDto toDto(Transaction t, Map<Long, String> accountNames) {
         return new TransactionDto(t.getId(), t.getAccountId(), accountNames.get(t.getAccountId()), t.getTxDate(),
-                t.getDescription(), t.getAmount(), t.isInflow(), t.getCategory().name());
+                t.getDescription(), t.getAmount(), t.isInflow(), t.getCategory());
     }
 }

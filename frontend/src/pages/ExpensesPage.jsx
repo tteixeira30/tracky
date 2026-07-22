@@ -5,11 +5,17 @@ import DatePicker from '../components/DatePicker'
 import Dropdown from '../components/Dropdown'
 import { useToast } from '../components/Toast'
 import { analyzeStatement, analyzeRows, buildTransactions, categoryKey } from '../statementParser'
-import { CATEGORIES, catLabel, catColor } from '../categories'
+import { DEFAULT_CATEGORIES, catLabel, catColor, setCustomCategories } from '../categories'
 import {
   IconBank, IconReceipt, IconUpload, IconPlus, IconPencil, IconWallet,
-  IconChevronLeft, IconChevronRight, IconArrowUp, IconArrowDown, IconCoins,
+  IconChevronLeft, IconChevronRight, IconArrowUp, IconArrowDown, IconCoins, IconPie, IconTrash,
 } from '../components/Icons'
+
+// Paleta para as categorias personalizadas (swatches do seletor de cor).
+const CATEGORY_COLORS = [
+  '#f59e0b', '#fb7185', '#a78bfa', '#818cf8', '#f472b6', '#34d399',
+  '#fbbf24', '#22d3ee', '#60a5fa', '#4ade80', '#f87171', '#c084fc',
+]
 
 const EMPTY_TX = { accountId: '', date: '', description: '', amount: '', inflow: false, category: 'OTHER' }
 
@@ -33,6 +39,12 @@ export default function ExpensesPage() {
   const [accountFilter, setAccountFilter] = useState('')
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [categories, setCategories] = useState([]) // categorias personalizadas do utilizador
+
+  // gestão de categorias
+  const [catModal, setCatModal] = useState(false)
+  const [catForm, setCatForm] = useState({ id: null, label: '', color: CATEGORY_COLORS[0] })
+  const [catToDelete, setCatToDelete] = useState(null)
 
   // modais
   const [accountModal, setAccountModal] = useState(false)
@@ -57,9 +69,24 @@ export default function ExpensesPage() {
   const load = () =>
     api.getExpenses(month, accountFilter || null).then(setData)
 
+  // categorias personalizadas: guarda no estado local (seletores) e no registo global
+  // (catLabel/catColor usados também no painel)
+  const loadCategories = () =>
+    api.getExpenseCategories().then((list) => { setCategories(list); setCustomCategories(list) })
+
   useEffect(() => {
     load().catch(() => toast.error('Erro', 'Não foi possível carregar as despesas.'))
   }, [month, accountFilter])
+
+  useEffect(() => {
+    loadCategories().catch(() => {})
+  }, [])
+
+  // opções de categoria para os seletores: por omissão + personalizadas
+  const catOptions = useMemo(() => [
+    ...DEFAULT_CATEGORIES.map((c) => ({ value: c, label: catLabel(c) })),
+    ...categories.map((c) => ({ value: c.key, label: c.label })),
+  ], [categories])
 
   // ---------- contas ----------
 
@@ -99,6 +126,37 @@ export default function ExpensesPage() {
       setAccountToDelete(null)
       await load()
       toast.info('Conta removida', `"${accountToDelete.name}" e os seus movimentos foram eliminados.`)
+    } catch (e) { toast.error('Erro ao remover', e.message) }
+    finally { setBusy(false) }
+  }
+
+  // ---------- categorias personalizadas ----------
+
+  const openCatEdit = (c) => { setCatForm({ id: c.id, label: c.label, color: c.color }); setCatModal(true) }
+
+  const saveCat = async () => {
+    if (!catForm.label.trim()) { toast.error('Nome em falta', 'Indica o nome da categoria.'); return }
+    const payload = { label: catForm.label.trim(), color: catForm.color }
+    setBusy(true)
+    try {
+      if (catForm.id) await api.updateExpenseCategory(catForm.id, payload)
+      else await api.addExpenseCategory(payload)
+      setCatModal(false)
+      await loadCategories()
+      await load()
+      toast.success(catForm.id ? 'Categoria atualizada' : 'Categoria criada', `"${payload.label}" guardada.`)
+    } catch (e) { toast.error('Erro ao guardar', e.message) }
+    finally { setBusy(false) }
+  }
+
+  const removeCat = async () => {
+    setBusy(true)
+    try {
+      await api.deleteExpenseCategory(catToDelete.id)
+      setCatToDelete(null)
+      await loadCategories()
+      await load()
+      toast.info('Categoria removida', `"${catToDelete.label}" foi eliminada. Os movimentos passaram para "Outros".`)
     } catch (e) { toast.error('Erro ao remover', e.message) }
     finally { setBusy(false) }
   }
@@ -401,6 +459,9 @@ export default function ExpensesPage() {
               <h3><IconCoins size={16} /> Despesas por categoria</h3>
               <div className="sub">{fmtMonth(month)}</div>
             </div>
+            <button className="btn ghost small" onClick={() => setCatModal(true)}>
+              <IconPie size={14} /> Gerir categorias
+            </button>
           </div>
           {data.byCategory.length === 0 ? (
             <p className="dim" style={{ padding: '4px 2px' }}>Ainda sem despesas neste mês.</p>
@@ -424,6 +485,77 @@ export default function ExpensesPage() {
           )}
         </div>
       </div>
+
+      {/* ---------- modal categorias ---------- */}
+      <Modal open={catModal} width={520}
+             onClose={() => { setCatModal(false); setCatForm({ id: null, label: '', color: CATEGORY_COLORS[0] }) }}
+             title="Gerir categorias"
+             subtitle="As categorias por omissão são fixas. Cria as tuas próprias para organizares as despesas à tua maneira.">
+        <div className="form-grid">
+          <div className="field full">
+            <label>{catForm.id ? 'Editar categoria' : 'Nova categoria'}</label>
+            <input placeholder="Ex: Educação" maxLength={60} value={catForm.label}
+                   onChange={(e) => setCatForm({ ...catForm, label: e.target.value })} />
+          </div>
+          <div className="field full">
+            <label>Cor</label>
+            <div className="color-picker">
+              {CATEGORY_COLORS.map((col) => (
+                <button key={col} type="button"
+                        className={`color-swatch ${catForm.color?.toLowerCase() === col ? 'selected' : ''}`}
+                        style={{ background: col }} title={col}
+                        onClick={() => setCatForm({ ...catForm, color: col })} />
+              ))}
+              <label className="color-custom" style={{ background: catForm.color }} title="Cor personalizada (RGB)">
+                <input type="color" value={catForm.color || CATEGORY_COLORS[0]}
+                       onChange={(e) => setCatForm({ ...catForm, color: e.target.value })} />
+                <IconPlus size={13} />
+              </label>
+            </div>
+          </div>
+          <div className="field full cat-form-actions">
+            {catForm.id && (
+              <button className="btn ghost" onClick={() => setCatForm({ id: null, label: '', color: CATEGORY_COLORS[0] })}>
+                Cancelar edição
+              </button>
+            )}
+            <button className="btn" onClick={saveCat} disabled={busy}>
+              {busy ? 'A guardar…' : (catForm.id ? 'Guardar alterações' : 'Adicionar categoria')}
+            </button>
+          </div>
+        </div>
+
+        <div className="cat-manage-list">
+          <div className="cat-manage-title">As tuas categorias</div>
+          {categories.length === 0 ? (
+            <p className="dim" style={{ padding: '2px' }}>Ainda não tens categorias personalizadas.</p>
+          ) : (
+            <ul className="event-list">
+              {categories.map((c) => (
+                <li key={c.id} className="event-row">
+                  <span className="tx-cat-dot" style={{ background: c.color }} />
+                  <div className="event-main"><strong>{c.label}</strong></div>
+                  <div className="event-actions">
+                    <button className="icon-btn" onClick={() => openCatEdit(c)} aria-label={`Editar ${c.label}`}><IconPencil size={14} /></button>
+                    <button className="icon-btn danger" onClick={() => setCatToDelete(c)} aria-label={`Eliminar ${c.label}`}><IconTrash size={14} /></button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="cat-manage-list">
+          <div className="cat-manage-title">Por omissão</div>
+          <div className="cat-default-chips">
+            {DEFAULT_CATEGORIES.map((c) => (
+              <span key={c} className="cat-default-chip">
+                <span className="tx-cat-dot" style={{ background: catColor(c) }} /> {catLabel(c)}
+              </span>
+            ))}
+          </div>
+        </div>
+      </Modal>
 
       {/* ---------- modal conta ---------- */}
       <Modal open={accountModal} onClose={() => setAccountModal(false)}
@@ -477,7 +609,7 @@ export default function ExpensesPage() {
             <label>Categoria</label>
             <Dropdown value={txForm.category} onChange={(category) => {
               setTxForm({ ...txForm, category, inflow: category === 'INCOME' ? true : txForm.inflow })
-            }} options={CATEGORIES.map((c) => ({ value: c, label: catLabel(c) }))} />
+            }} options={catOptions} />
           </div>
           <div className="field">
             <label>Tipo</label>
@@ -617,6 +749,10 @@ export default function ExpensesPage() {
                      title="Eliminar conta?"
                      message={`"${accountToDelete?.name}" e todos os seus movimentos (${accountToDelete?.transactionCount || 0}) vão ser eliminados.`}
                      onConfirm={removeAccount} onCancel={() => setAccountToDelete(null)} />
+      <ConfirmDialog open={!!catToDelete} busy={busy}
+                     title="Eliminar categoria?"
+                     message={`"${catToDelete?.label}" vai ser eliminada. Os movimentos que a usavam passam para "Outros".`}
+                     onConfirm={removeCat} onCancel={() => setCatToDelete(null)} />
     </div>
   )
 }

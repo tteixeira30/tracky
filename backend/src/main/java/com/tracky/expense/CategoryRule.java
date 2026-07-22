@@ -26,8 +26,8 @@ public class CategoryRule {
     @Column(name = "match_key", length = 500)
     private String matchKey;
 
-    @Enumerated(EnumType.STRING)
-    private Transaction.Category category = Transaction.Category.OTHER;
+    /** Chave da categoria a aplicar (ver {@link Transaction#getCategory()}). */
+    private String category = "OTHER";
 
     private Instant createdAt = Instant.now();
 
@@ -36,9 +36,9 @@ public class CategoryRule {
     public void setUserId(Long userId) { this.userId = userId; }
     public String getMatchKey() { return matchKey; }
     public void setMatchKey(String matchKey) { this.matchKey = matchKey; }
-    public Transaction.Category getCategory() { return category == null ? Transaction.Category.OTHER : category; }
-    public void setCategory(Transaction.Category category) {
-        this.category = category == null ? Transaction.Category.OTHER : category;
+    public String getCategory() { return category == null || category.isBlank() ? "OTHER" : category; }
+    public void setCategory(String category) {
+        this.category = category == null || category.isBlank() ? "OTHER" : category;
     }
     public Instant getCreatedAt() { return createdAt; }
 }

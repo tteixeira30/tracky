@@ -15,11 +15,6 @@ import java.time.LocalDate;
 @Table(name = "transactions")
 public class Transaction {
 
-    public enum Category {
-        INCOME, GROCERIES, RESTAURANT, TRANSPORT, HOUSING, SUBSCRIPTION,
-        SHOPPING, HEALTH, LEISURE, TRANSFER, OTHER
-    }
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -41,8 +36,12 @@ public class Transaction {
     /** true = entrada de dinheiro; false = saída (despesa). */
     private boolean inflow = false;
 
-    @Enumerated(EnumType.STRING)
-    private Category category = Category.OTHER;
+    /**
+     * Chave da categoria (ex.: "GROCERIES" ou a chave de uma categoria
+     * personalizada do utilizador). Guardada como texto — as categorias já não
+     * são um enum fixo. A coluna mantém-se a mesma que o enum STRING usava.
+     */
+    private String category = "OTHER";
 
     private Instant createdAt = Instant.now();
 
@@ -59,7 +58,7 @@ public class Transaction {
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public boolean isInflow() { return inflow; }
     public void setInflow(boolean inflow) { this.inflow = inflow; }
-    public Category getCategory() { return category == null ? Category.OTHER : category; }
-    public void setCategory(Category category) { this.category = category == null ? Category.OTHER : category; }
+    public String getCategory() { return category == null || category.isBlank() ? "OTHER" : category; }
+    public void setCategory(String category) { this.category = category == null || category.isBlank() ? "OTHER" : category; }
     public Instant getCreatedAt() { return createdAt; }
 }
