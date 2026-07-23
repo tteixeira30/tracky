@@ -1,4 +1,4 @@
-# Tracky — Gestor de Finanças Pessoais
+# Vaultrack — Gestor de Finanças Pessoais
 
 Aplicação para gerir rendimento mensal, investimentos (com preços em tempo real) e objetivos de poupança.
 

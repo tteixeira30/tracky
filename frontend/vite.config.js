@@ -10,8 +10,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Tracky',
-        short_name: 'Tracky',
+        name: 'Vaultrack',
+        short_name: 'Vaultrack',
         description: 'Finanças pessoais',
         lang: 'pt-PT',
         display: 'standalone',

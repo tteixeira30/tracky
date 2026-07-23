@@ -1,6 +1,6 @@
 {
   "appId": "com.tracky.app",
-  "appName": "Tracky",
+  "appName": "Vaultrack",
   "webDir": "dist",
   "android": {
     "allowMixedContent": false
