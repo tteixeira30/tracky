@@ -164,7 +164,7 @@ function Shell() {
         <div className="brand">
           <IconLogo size={34} />
           <div>
-            <h1>Trac<span>ky</span></h1>
+            <h1>Vault<span>rack</span></h1>
             <small>Finanças pessoais</small>
           </div>
         </div>

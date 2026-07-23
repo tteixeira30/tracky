@@ -39,7 +39,7 @@ export default function AuthPage() {
       <div className="auth-card">
         <div className="auth-brand">
           <IconLogo size={44} />
-          <h1>Trac<span>ky</span></h1>
+          <h1>Vault<span>rack</span></h1>
           <p>Gere o teu rendimento, investimentos e objetivos num só lugar.</p>
         </div>
 
