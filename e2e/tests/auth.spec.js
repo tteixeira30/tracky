@@ -6,7 +6,7 @@ test.describe('autenticação', () => {
     const { email } = await registerViaUi(page, { name: 'Maria Teste', email: uniqueEmail() })
 
     // sessão iniciada: brand e separadores visíveis
-    await expect(page.locator('.sidebar .brand')).toContainText('Tracky')
+    await expect(page.locator('.sidebar .brand')).toContainText('Vaultrack')
     await expect(sidebarTab(page, 'Rendimento')).toBeVisible()
     await expect(page.locator('.profile-trigger')).toContainText('Maria Teste')
 
